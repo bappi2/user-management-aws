@@ -1,8 +1,8 @@
 import { Stage, StageConfig } from './types';
 
 const ACCOUNT = process.env.USER_MGMT_ACCOUNT;
-if (!ACCOUNT) {
-  throw new Error('USER_MGMT_ACCOUNT is not set. Add it to ~/.zshrc');
+if (!ACCOUNT || !/^\d{12}$/.test(ACCOUNT)) {
+  throw new Error(`USER_MGMT_ACCOUNT must be a 12-digit AWS account id, got: "${ACCOUNT}"`);
 }
 const REGION = 'us-west-2';
 
