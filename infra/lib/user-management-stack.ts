@@ -61,7 +61,7 @@ export class UserManagementStack extends Stack {
 
     this.table.grantReadWriteData(apiFunction);
 
-        const api = new apigw.RestApi(this, 'Api', {
+    const api = new apigw.RestApi(this, 'Api', {
       restApiName: `usermanagement-${config.stage}`,
       deployOptions: {
         stageName: config.stage,
@@ -69,18 +69,78 @@ export class UserManagementStack extends Stack {
         throttlingBurstLimit: config.api.throttleBurstLimit,
       },
     });
+        // Validate request bodies (FluentValidation-equivalent at the edge)
+    const bodyValidator = api.addRequestValidator('BodyValidator', {
+      requestValidatorName: 'body-validator',
+      validateRequestBody: true,
+      validateRequestParameters: false,
+    });
+
+    // Evently: RegisterUserCommandValidator
+    const registerUserModel = api.addModel('RegisterUserModel', {
+      modelName: 'RegisterUserRequest',
+      contentType: 'application/json',
+      schema: {
+        schema: apigw.JsonSchemaVersion.DRAFT4,
+        type: apigw.JsonSchemaType.OBJECT,
+        required: ['email', 'password', 'firstName', 'lastName'],
+        additionalProperties: false,
+        properties: {
+          email: { type: apigw.JsonSchemaType.STRING, pattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$' },
+          password: { type: apigw.JsonSchemaType.STRING, minLength: 6 },
+          firstName: { type: apigw.JsonSchemaType.STRING, minLength: 1 },
+          lastName: { type: apigw.JsonSchemaType.STRING, minLength: 1 },
+        },
+      },
+    });
+
+    // Evently: UpdateUserProfile.Request
+    const updateUserProfileModel = api.addModel('UpdateUserProfileModel', {
+      modelName: 'UpdateUserProfileRequest',
+      contentType: 'application/json',
+      schema: {
+        schema: apigw.JsonSchemaVersion.DRAFT4,
+        type: apigw.JsonSchemaType.OBJECT,
+        required: ['firstName', 'lastName'],
+        additionalProperties: false,
+        properties: {
+          firstName: { type: apigw.JsonSchemaType.STRING, minLength: 1 },
+          lastName: { type: apigw.JsonSchemaType.STRING, minLength: 1 },
+        },
+      },
+    });
+
+    // Return validation errors as Problem Details, like the Lambda does
+    api.addGatewayResponse('BadRequestBody', {
+      type: apigw.ResponseType.BAD_REQUEST_BODY,
+      statusCode: '400',
+      responseHeaders: { 'Content-Type': "'application/problem+json'" },
+      templates: {
+        'application/json':
+          '{"type":"about:blank","title":"Request.ValidationFailed","status":400,"detail":$context.error.messageString}',
+      },
+    });
+
 
     const integration = new apigw.LambdaIntegration(apiFunction);
 
     const users = api.root.addResource('v1').addResource('users');
 
     // Evently: RegisterUser (.AllowAnonymous)
-    users.addResource('register').addMethod('POST', integration);
-
-    // Evently: GetUserProfile / UpdateUserProfile (.RequireAuthorization -> Cognito later)
+        users.addResource('register').addMethod('POST', integration, {
+      requestValidator: bodyValidator,
+      requestModels: { 'application/json': registerUserModel },
+    });
+   // Evently: GetUserProfile / UpdateUserProfile (.RequireAuthorization -> Cognito later)
     const profile = users.addResource('profile');
-    profile.addMethod('GET', integration);
-    profile.addMethod('PUT', integration);
+    profile.addMethod('GET', integration);                       // no body → no validator
+    profile.addMethod('PUT', integration, {
+      requestValidator: bodyValidator,
+      requestModels: { 'application/json': updateUserProfileModel },
+    });
+
+
+ 
 
     new CfnOutput(this, 'ApiUrl', { value: api.url });
 

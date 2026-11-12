@@ -22,11 +22,16 @@ Claude does not modify code: Claude explains, I make the changes myself.
   - GET/PUT /v1/users/profile (userId from JWT claims; Cognito authorizer later)
   - One Lambda, router → one handler per use case; errors as RFC 7807 Problem Details
 - REST API (apigateway.RestApi), proxy integration, stage name = config.stage, throttling from config
+- Request validation: API Gateway models for shape (rejects at the edge, no Lambda cost) + Java validation
+  for rules (authoritative, per-field errors). Gateway 400s use Problem Details (BAD_REQUEST_BODY gateway response)
+- Placeholder Lambda is plain JS (infra/.gitignore has `!lambda/**/*.js` so it is tracked); removed in 1.4
 
 ## Done
 - 1.2: CDK app, stage config, DynamoDB table (deployed, tested, destroyed)
 - 1.3: Placeholder Node Lambda (infra/lambda/placeholder) + REST API routes (deployed, tested, destroyed)
+- 1.3b: Request validator + models for register / profile PUT, Problem Details gateway response (deployed, tested, destroyed)
 
 ## Current step
 Phase 1.4: Java Lambda in services/user-api (Maven, Java 21, router + RegisterUser/GetUserProfile/UpdateUserProfile
-handlers, read/write DynamoDB, SnapStart). Then swap the placeholder in the stack and delete infra/lambda/placeholder.
+handlers, read/write DynamoDB, SnapStart). Then swap the placeholder in the stack, delete infra/lambda/placeholder
+and its `!lambda/**/*.js` .gitignore rule.
