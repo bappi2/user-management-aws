@@ -7,4 +7,13 @@ export interface StageConfig {
   readonly env: Required<Pick<Environment, 'account' | 'region'>>;
   readonly retainData: boolean;          // keep the table if the stack is deleted?
   readonly pointInTimeRecovery: boolean; // continuous backups (costs money)
+  readonly lambda: {
+    readonly memorySize: number;      // MB
+    readonly timeoutSeconds: number;
+  };
+  readonly api: {
+    readonly throttleRateLimit: number;   // steady requests/sec
+    readonly throttleBurstLimit: number;  // short spikes
+  };
+
 }
