@@ -12,7 +12,7 @@ export const STAGES: Record<Stage, StageConfig> = {
     env: { account: ACCOUNT, region: REGION },
     retainData: false,
     pointInTimeRecovery: false,
-    lambda: { memorySize: 512, timeoutSeconds: 10 },
+    lambda: { memorySize: 1024, timeoutSeconds: 10 },
     api: { throttleRateLimit: 10, throttleBurstLimit: 20 },
 
   },
@@ -21,7 +21,7 @@ export const STAGES: Record<Stage, StageConfig> = {
     env: { account: ACCOUNT, region: REGION },
     retainData: false,          // flip to true once real users exist
     pointInTimeRecovery: false,
-    lambda: { memorySize: 512, timeoutSeconds: 10 },
+    lambda: { memorySize: 1024, timeoutSeconds: 10 },
     api: { throttleRateLimit: 10, throttleBurstLimit: 20 },
   },
 };

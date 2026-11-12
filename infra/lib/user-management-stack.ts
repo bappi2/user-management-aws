@@ -50,16 +50,30 @@ export class UserManagementStack extends Stack {
 
     const apiFunction = new lambda.Function(this, 'ApiFunction', {
       functionName,
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/placeholder')),
+      runtime: lambda.Runtime.JAVA_21,
+      architecture: lambda.Architecture.ARM_64,
+      handler: 'com.usermanagement.api.ApiHandler::handleRequest',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../../services/user-api/target/user-api.jar')),
       memorySize: config.lambda.memorySize,
       timeout: Duration.seconds(config.lambda.timeoutSeconds),
-      environment: { TABLE_NAME: this.table.tableName },
+      environment: {
+        TABLE_NAME: this.table.tableName,
+        JAVA_TOOL_OPTIONS: '-XX:+TieredCompilation -XX:TieredStopAtLevel=1',
+      },
+      loggingFormat: lambda.LoggingFormat.JSON,
       logGroup,
+      snapStart: lambda.SnapStartConf.ON_PUBLISHED_VERSIONS,
+
     });
 
+
     this.table.grantReadWriteData(apiFunction);
+    // SnapStart only applies to published versions → API Gateway must call an alias, not $LATEST
+    const liveAlias = new lambda.Alias(this, 'ApiFunctionLive', {
+      aliasName: 'live',
+      version: apiFunction.currentVersion,
+    });
+
 
     const api = new apigw.RestApi(this, 'Api', {
       restApiName: `usermanagement-${config.stage}`,
@@ -122,7 +136,9 @@ export class UserManagementStack extends Stack {
     });
 
 
-    const integration = new apigw.LambdaIntegration(apiFunction);
+    //const integration = new apigw.LambdaIntegration(apiFunction);
+    const integration = new apigw.LambdaIntegration(liveAlias);
+
 
     const users = api.root.addResource('v1').addResource('users');
 
