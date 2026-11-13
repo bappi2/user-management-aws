@@ -25,7 +25,30 @@ public final class DynamoDbUserRepository implements UserRepository {
         this.dynamo = dynamo;
         this.tableName = tableName;
     }
+    @Override
+    public boolean insert(User user) {
+        String now = Instant.now().toString();
+        try {
+            dynamo.putItem(request -> request
+                    .tableName(tableName)
+                    .item(Map.of(
+                            "pk", s(userPk(user.id())),
+                            "sk", s(PROFILE),
+                            "type", s("User"),
+                            "id", s(user.id()),
+                            "email", s(user.email()),
+                            "firstName", s(user.firstName()),
+                            "lastName", s(user.lastName()),
+                            "createdAt", s(now),
+                            "updatedAt", s(now)))
+                    .conditionExpression("attribute_not_exists(pk)"));
+            return true;
+        } catch (ConditionalCheckFailedException e) {
+            return false; // already exists → idempotent
+        }
+    }
 
+/*
     @Override
     public boolean insert(User user) {
         String now = Instant.now().toString();
@@ -69,7 +92,7 @@ public final class DynamoDbUserRepository implements UserRepository {
             }
             throw e; // anything else is unexpected -> 500
         }
-    }
+    } */
 
     @Override
     public Optional<User> findById(String id) {

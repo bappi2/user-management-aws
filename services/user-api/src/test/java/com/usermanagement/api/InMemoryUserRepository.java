@@ -3,25 +3,20 @@ package com.usermanagement.api;
 import com.usermanagement.api.users.User;
 import com.usermanagement.api.users.UserRepository;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+
 
 /** Test double for UserRepository. Same contract as the DynamoDB one (1.4b). */
 class InMemoryUserRepository implements UserRepository {
 
     private final Map<String, User> usersById = new HashMap<>();
-    private final Set<String> emails = new HashSet<>();
 
     @Override
     public boolean insert(User user) {
-        if (!emails.add(user.email())) {
-            return false;
-        }
-        usersById.put(user.id(), user);
-        return true;
+        return usersById.putIfAbsent(user.id(), user) == null;
     }
+
 
     @Override
     public Optional<User> findById(String id) {

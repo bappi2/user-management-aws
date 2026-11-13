@@ -8,7 +8,7 @@ import com.usermanagement.api.http.ApiException;
 import com.usermanagement.api.http.HttpResponses;
 import com.usermanagement.api.http.Json;
 import com.usermanagement.api.users.GetUserProfile;
-import com.usermanagement.api.users.RegisterUser;
+// import com.usermanagement.api.users.RegisterUser;
 import com.usermanagement.api.users.UpdateUserProfile;
 import com.usermanagement.api.users.UserRepository;
 import java.util.List;
@@ -29,13 +29,13 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
 
     /** Called by the Lambda runtime once per cold start (requires a public no-arg constructor). */
     public ApiHandler() {
-        this(new DynamoDbUserRepository(AwsClients.dynamoDb(), requireEnv("TABLE_NAME")));
+        // should be: client + table name
+        this(new DynamoDbUserRepository(AwsClients.dynamoDb(), AwsClients.requireEnv("TABLE_NAME")));
         Core.getGlobalContext().register(this);
     }
 
     public ApiHandler(UserRepository users) {
         List<Endpoint> endpoints = List.of(
-                new RegisterUser(users),
                 new GetUserProfile(users),
                 new UpdateUserProfile(users));
         this.routes = endpoints.stream()
@@ -91,14 +91,14 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         // nothing to refresh: SDK reconnects, credentials provider refreshes itself
     }
 
-
+/*
     private static String requireEnv(String name) {
         String value = System.getenv(name);
         if (value == null || value.isBlank()) {
             throw new IllegalStateException("Missing environment variable " + name);
         }
         return value;
-    }
+    } */
 
     /** LambdaLogger keeps multi-line messages (stack traces) as ONE CloudWatch event. */
     private static void log(Context context, String message) {
