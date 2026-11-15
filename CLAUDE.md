@@ -9,6 +9,12 @@ Claude does not modify code: Claude explains, I make the changes myself.
 - apps/web/: React + Vite (later)
 - platform/: CDK pipeline (later); docs/: architecture notes
 
+## Architecture
+![Architecture](docs/architecture.svg)
+
+Source: [docs/architecture.svg](docs/architecture.svg). Solid = deployed (Phase 1), dashed = planned (Phase 2).
+History of what was built: [docs/WORKLOG.md](docs/WORKLOG.md).
+
 ## Decisions
 - Build order: infra → backend → frontend
 - One AWS account for now (456423665721, us-west-2); separate beta/prod accounts later via AWS Organizations

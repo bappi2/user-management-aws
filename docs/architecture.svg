@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1230" height="820" viewBox="0 0 1230 820" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#232F3E"/>
+    </marker>
+    <marker id="arrow-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8A8F98"/>
+    </marker>
+    <style>
+      .title { font-size: 20px; font-weight: 700; fill: #232F3E; }
+      .hdr   { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+      .txt   { font-size: 12px; fill: #232F3E; }
+      .small { font-size: 11px; fill: #545B64; }
+      .badge { font-size: 11px; font-weight: 700; fill: #FFFFFF; text-anchor: middle; }
+      .flow  { stroke: #232F3E; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .plan  { stroke: #8A8F98; stroke-width: 1.6; fill: none; stroke-dasharray: 6 5; marker-end: url(#arrow-grey); }
+      .logs  { stroke: #8A8F98; stroke-width: 1.4; fill: none; marker-end: url(#arrow-grey); }
+    </style>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="1230" height="820" fill="#FFFFFF"/>
+
+  <!-- title + legend -->
+  <text x="30" y="38" class="title">user-management-aws · architecture</text>
+  <line x1="820" y1="33" x2="860" y2="33" stroke="#232F3E" stroke-width="1.8"/>
+  <text x="868" y="37" class="small">deployed (Phase 1)</text>
+  <line x1="990" y1="33" x2="1030" y2="33" stroke="#8A8F98" stroke-width="1.6" stroke-dasharray="6 5"/>
+  <text x="1038" y="37" class="small">planned (Phase 2)</text>
+
+  <!-- AWS region frame -->
+  <rect x="270" y="70" width="930" height="730" rx="10" fill="#F7FAFA" stroke="#00A4A6" stroke-width="1.5" stroke-dasharray="8 5"/>
+  <text x="286" y="92" font-size="13" font-weight="700" fill="#00A4A6">AWS Cloud · us-west-2</text>
+
+  <!-- ============ Client side ============ -->
+  <!-- Browser -->
+  <rect x="30" y="330" width="200" height="120" rx="8" fill="#FFFFFF" stroke="#232F3E" stroke-width="1.5"/>
+  <rect x="30" y="330" width="200" height="26" rx="8" fill="#232F3E"/><rect x="30" y="344" width="200" height="12" fill="#232F3E"/>
+  <text x="42" y="348" class="hdr">Browser</text>
+  <text x="42" y="376" class="txt">React SPA (apps/web)</text>
+  <text x="42" y="394" class="txt">Vite + TypeScript</text>
+  <text x="42" y="412" class="txt">Amplify auth (planned)</text>
+  <text x="42" y="430" class="small">ID token in Authorization header</text>
+
+  <!-- Developer -->
+  <rect x="30" y="650" width="200" height="90" rx="8" fill="#FFFFFF" stroke="#232F3E" stroke-width="1.5"/>
+  <rect x="30" y="650" width="200" height="26" rx="8" fill="#232F3E"/><rect x="30" y="664" width="200" height="12" fill="#232F3E"/>
+  <text x="42" y="668" class="hdr">Developer laptop</text>
+  <text x="42" y="696" class="txt">mvn package (JAR)</text>
+  <text x="42" y="714" class="txt">npx cdk deploy</text>
+
+  <!-- ============ Planned hosting (top row) ============ -->
+  <!-- CloudFront -->
+  <rect x="300" y="100" width="210" height="100" rx="8" fill="#FFFFFF" stroke="#8C4FFF" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <rect x="300" y="100" width="210" height="26" rx="8" fill="#8C4FFF" opacity="0.6"/><rect x="300" y="114" width="210" height="12" fill="#8C4FFF" opacity="0.6"/>
+  <text x="312" y="118" class="hdr">Amazon CloudFront (planned)</text>
+  <text x="312" y="146" class="txt">HTTPS · caches hashed assets</text>
+  <text x="312" y="164" class="txt">SPA fallback to index.html</text>
+  <text x="312" y="182" class="small">optional custom domain + ACM</text>
+
+  <!-- S3 -->
+  <rect x="560" y="100" width="210" height="100" rx="8" fill="#FFFFFF" stroke="#7AA116" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <rect x="560" y="100" width="210" height="26" rx="8" fill="#7AA116" opacity="0.6"/><rect x="560" y="114" width="210" height="12" fill="#7AA116" opacity="0.6"/>
+  <text x="572" y="118" class="hdr">Amazon S3 (planned)</text>
+  <text x="572" y="146" class="txt">Private bucket</text>
+  <text x="572" y="164" class="txt">React build (dist/)</text>
+
+  <!-- IAM -->
+  <rect x="960" y="100" width="220" height="120" rx="8" fill="#FFFFFF" stroke="#DD344C" stroke-width="1.5"/>
+  <rect x="960" y="100" width="220" height="26" rx="8" fill="#DD344C"/><rect x="960" y="114" width="220" height="12" fill="#DD344C"/>
+  <text x="972" y="118" class="hdr">AWS IAM</text>
+  <text x="972" y="146" class="txt">One role per Lambda</text>
+  <text x="972" y="164" class="txt">api: GetItem, UpdateItem</text>
+  <text x="972" y="182" class="txt">trigger: PutItem, GetItem</text>
+  <text x="972" y="200" class="small">least privilege, this table only</text>
+
+  <!-- ============ Deployed (Phase 1) ============ -->
+  <!-- Cognito -->
+  <rect x="300" y="250" width="210" height="130" rx="8" fill="#FFFFFF" stroke="#DD344C" stroke-width="1.5"/>
+  <rect x="300" y="250" width="210" height="26" rx="8" fill="#DD344C"/><rect x="300" y="264" width="210" height="12" fill="#DD344C"/>
+  <text x="312" y="268" class="hdr">Amazon Cognito</text>
+  <text x="312" y="296" class="txt">User Pool usermanagement-beta</text>
+  <text x="312" y="314" class="txt">Email sign-in · self sign-up</text>
+  <text x="312" y="332" class="txt">Email verification code</text>
+  <text x="312" y="350" class="txt">App client: SRP, no secret</text>
+  <text x="312" y="368" class="small">issues JWTs (1 h)</text>
+
+  <!-- Post-confirmation Lambda -->
+  <rect x="640" y="250" width="240" height="130" rx="8" fill="#FFFFFF" stroke="#ED7100" stroke-width="1.5"/>
+  <rect x="640" y="250" width="240" height="26" rx="8" fill="#ED7100"/><rect x="640" y="264" width="240" height="12" fill="#ED7100"/>
+  <text x="652" y="268" class="hdr">AWS Lambda · post-confirmation</text>
+  <text x="652" y="296" class="txt">Java 21 · arm64 · 1024 MB</text>
+  <text x="652" y="314" class="txt">SnapStart + priming · alias live</text>
+  <text x="652" y="332" class="txt">Creates profile on ConfirmSignUp</text>
+  <text x="652" y="350" class="txt">Idempotent · timeout 5 s</text>
+  <text x="652" y="368" class="small">PostConfirmationHandler</text>
+
+  <!-- DynamoDB -->
+  <rect x="960" y="330" width="220" height="120" rx="8" fill="#FFFFFF" stroke="#C925D1" stroke-width="1.5"/>
+  <rect x="960" y="330" width="220" height="26" rx="8" fill="#C925D1"/><rect x="960" y="344" width="220" height="12" fill="#C925D1"/>
+  <text x="972" y="348" class="hdr">Amazon DynamoDB</text>
+  <text x="972" y="376" class="txt">Table usermanagement-beta</text>
+  <text x="972" y="394" class="txt">pk / sk + GSI1 · on-demand</text>
+  <text x="972" y="412" class="txt">USER#&lt;sub&gt; / PROFILE</text>
+  <text x="972" y="430" class="small">encrypted at rest</text>
+
+  <!-- API Gateway -->
+  <rect x="300" y="440" width="210" height="150" rx="8" fill="#FFFFFF" stroke="#8C4FFF" stroke-width="1.5"/>
+  <rect x="300" y="440" width="210" height="26" rx="8" fill="#8C4FFF"/><rect x="300" y="454" width="210" height="12" fill="#8C4FFF"/>
+  <text x="312" y="458" class="hdr">Amazon API Gateway</text>
+  <text x="312" y="486" class="txt">REST API · stage /beta</text>
+  <text x="312" y="504" class="txt">GET/PUT /v1/users/profile</text>
+  <text x="312" y="522" class="txt">Cognito authorizer</text>
+  <text x="312" y="540" class="txt">Body validator (JSON model)</text>
+  <text x="312" y="558" class="txt">Throttle 10 rps · burst 20</text>
+  <text x="312" y="576" class="small">Problem Details errors · HTTPS</text>
+
+  <!-- API Lambda -->
+  <rect x="640" y="450" width="240" height="140" rx="8" fill="#FFFFFF" stroke="#ED7100" stroke-width="1.5"/>
+  <rect x="640" y="450" width="240" height="26" rx="8" fill="#ED7100"/><rect x="640" y="464" width="240" height="12" fill="#ED7100"/>
+  <text x="652" y="468" class="hdr">AWS Lambda · api</text>
+  <text x="652" y="496" class="txt">Java 21 · arm64 · 1024 MB</text>
+  <text x="652" y="514" class="txt">SnapStart + priming · alias live</text>
+  <text x="652" y="532" class="txt">ApiHandler router →</text>
+  <text x="652" y="550" class="txt">GetUserProfile · UpdateUserProfile</text>
+  <text x="652" y="568" class="small">SDK timeouts 3 s / 1 s</text>
+
+  <!-- CloudWatch Logs -->
+  <rect x="960" y="520" width="220" height="90" rx="8" fill="#FFFFFF" stroke="#E7157B" stroke-width="1.5"/>
+  <rect x="960" y="520" width="220" height="26" rx="8" fill="#E7157B"/><rect x="960" y="534" width="220" height="12" fill="#E7157B"/>
+  <text x="972" y="538" class="hdr">Amazon CloudWatch Logs</text>
+  <text x="972" y="566" class="txt">2 log groups (one per Lambda)</text>
+  <text x="972" y="584" class="txt">JSON format · 1-week retention</text>
+
+  <!-- CloudFormation / CDK -->
+  <rect x="300" y="650" width="580" height="90" rx="8" fill="#FFFFFF" stroke="#E7157B" stroke-width="1.5"/>
+  <rect x="300" y="650" width="580" height="26" rx="8" fill="#E7157B"/><rect x="300" y="664" width="580" height="12" fill="#E7157B"/>
+  <text x="312" y="668" class="hdr">AWS CloudFormation · AWS CDK</text>
+  <text x="312" y="696" class="txt">Stack UserManagement-beta: creates and updates every resource in this diagram</text>
+  <text x="312" y="714" class="txt">JAR + assets uploaded to the CDK bootstrap bucket (CDKToolkit)</text>
+  <text x="312" y="732" class="small">RemovalPolicy.DESTROY while learning · npx cdk destroy removes everything</text>
+
+  <!-- ============ Arrows ============ -->
+  <!-- planned: browser loads the app from CloudFront, CloudFront reads S3 -->
+  <path d="M130 330 V150 H298" class="plan"/>
+  <text x="140" y="142" class="small">load app (planned)</text>
+  <path d="M510 150 H558" class="plan"/>
+
+  <!-- 1: browser to Cognito -->
+  <path d="M230 365 L298 331" class="flow"/>
+  <!-- 4: browser to API Gateway -->
+  <path d="M230 415 L298 499" class="flow"/>
+  <!-- 2: Cognito to post-confirmation Lambda -->
+  <path d="M510 300 H638" class="flow"/>
+  <!-- 3: post-confirmation Lambda to DynamoDB -->
+  <path d="M880 315 H920 V370 H958" class="flow"/>
+  <!-- 5: authorizer verifies JWT against the User Pool -->
+  <path d="M405 440 V382" class="flow"/>
+  <!-- 6: API Gateway to API Lambda -->
+  <path d="M510 515 H638" class="flow"/>
+  <!-- 7: API Lambda to DynamoDB -->
+  <path d="M880 500 H920 V420 H958" class="flow"/>
+  <!-- logs -->
+  <path d="M880 572 H958" class="logs"/>
+  <text x="900" y="565" class="small">logs</text>
+  <!-- deploy -->
+  <path d="M230 695 H298" class="flow"/>
+  <text x="233" y="687" class="small">deploy</text>
+
+  <!-- number badges -->
+  <circle cx="265" cy="348" r="10" fill="#232F3E"/><text x="265" y="352" class="badge">1</text>
+  <circle cx="575" cy="300" r="10" fill="#232F3E"/><text x="575" y="304" class="badge">2</text>
+  <circle cx="920" cy="342" r="10" fill="#232F3E"/><text x="920" y="346" class="badge">3</text>
+  <circle cx="265" cy="457" r="10" fill="#232F3E"/><text x="265" y="461" class="badge">4</text>
+  <circle cx="405" cy="411" r="10" fill="#232F3E"/><text x="405" y="415" class="badge">5</text>
+  <circle cx="575" cy="515" r="10" fill="#232F3E"/><text x="575" y="519" class="badge">6</text>
+  <circle cx="920" cy="460" r="10" fill="#232F3E"/><text x="920" y="464" class="badge">7</text>
+
+  <!-- ============ Request flow legend ============ -->
+  <rect x="960" y="630" width="220" height="152" rx="8" fill="#FFFFFF" stroke="#D5DBDB" stroke-width="1.2"/>
+  <text x="972" y="652" font-size="13" font-weight="700" fill="#232F3E">Request flow</text>
+  <text x="972" y="672" class="small">1  Sign up · confirm · sign in (SRP)</text>
+  <text x="972" y="688" class="small">2  PostConfirmation trigger</text>
+  <text x="972" y="704" class="small">3  PutItem USER#&lt;sub&gt;</text>
+  <text x="972" y="720" class="small">4  GET/PUT /profile + ID token</text>
+  <text x="972" y="736" class="small">5  Authorizer verifies the JWT</text>
+  <text x="972" y="752" class="small">6  Proxy to Lambda alias live</text>
+  <text x="972" y="768" class="small">7  GetItem / UpdateItem</text>
+</svg>
