@@ -24,6 +24,12 @@ Current decisions and next step live in [CLAUDE.md](../CLAUDE.md); this file is 
 | `c959d1e` | 2.3 | Amplify auth: sign up, confirm code, sign in (SRP), sign out |
 | `c507fc1` | 2.4 | Profile page: GET/PUT with ID token, Problem Details errors, session-expired handling |
 | `29450fe` | 2.5 | S3 + CloudFront hosting (OAC, security headers, cache rules, SPA fallback) + runtime `config.json` |
+| `7e64e44` | | Docs: Phase 2 decisions, work log, architecture diagram |
+| `8918add`, `f566ae8` | 3.0 | Diagram: pipeline planned (two accounts drafted, then single account) |
+| `bca92a4` | 3.2 | `UserManagementStage` wraps the stack (pipeline-ready) |
+| `1abf593` | 3.3 | CDK pipeline: GitHub source, synth React + Java + CDK, beta stage |
+| `6953e62` | 3.4 | Post-deploy smoke test for beta |
+| `b1427a2` | 3.5 | Manual approval + prod stage with smoke test |
 
 ---
 
@@ -284,6 +290,68 @@ Routes chosen: `POST /v1/users/register`, `GET/PUT /v1/users/profile`.
 
 ---
 
+## Phase 3: CDK pipeline
+
+Goal: `git push` builds React + Java, deploys beta, smoke-tests it, waits for approval, deploys prod.
+
+### 3.0: Where the pipeline lives, how many accounts
+- **Pipeline in `infra/`, not `platform/`:** CDK Pipelines deploys `Stage` objects, so the pipeline and the stacks
+  must be in the same CDK app. A separate app importing `../infra/lib` would load two copies of `aws-cdk-lib`
+- **Accounts:** discussed the AWS best practice (management / tooling / beta / prod), then a two-account
+  compromise (current account = pipeline + beta, new prod account). `aws organizations list-accounts` →
+  `AWSOrganizationsNotInUseException` (no org yet). Decision: **stay in one account while learning**; the diagram was
+  redrawn for a single account. Later path is in CLAUDE.md (bootstrap `--trust`, `crossAccountKeys: true`)
+
+### 3.1: GitHub connection
+- Console → CodePipeline → Settings → Connections → GitHub → install the AWS Connector app on this repo only
+- `aws codeconnections list-connections` → `user-management-github` **AVAILABLE**
+- The ARN isn't secret; `infra/config/pipeline.ts` builds it from the account variable (no account ID in code)
+
+### 3.2: Stage refactor
+- `infra/lib/user-management-stage.ts`: `UserManagementStage extends Stage`, creates the stack with
+  `stackName: UserManagement-${stage}` (without it CDK would create a NEW stack named after the path) + tags
+- `cdk list` → `beta/UserManagement (UserManagement-beta)`
+- **Problem:** `cdk diff` showed `[-]`/`[+]` on 4 Lambda permissions + the API Deployment, and `[~]` on the CloudFront
+  origin Id and bucket tags. I had said "any `[-]`/`[+]` is bad", which was too strict. **Cause:** these names are
+  built from the full construct path (`UserManagementbetaApi…` → `betaUserManagementApi…`). **Fix:** none needed;
+  nothing stateful is replaced. Real rule: red flag only if table / user pool / bucket / distribution is replaced
+- Deployed from the laptop (116 s) so a refactor problem couldn't be confused with a pipeline problem.
+  Smoke-checked: web 200, config.json 200, api 401, preflight 204; URLs unchanged
+- CLI shows outputs as `betaUserManagement060CF9C8.ApiUrl`: only the display name; CFN output keys are unchanged,
+  so `env-from-stack.sh` still works
+
+### 3.3: Pipeline stack
+- `infra/lib/pipeline-stack.ts`: `CodePipelineSource.connection`, `CodePipeline` (V2, `crossAccountKeys: false`),
+  `ShellStep('Synth')` with subshell commands for npm / Maven / cdk synth, `primaryOutputDirectory: infra/cdk.out`,
+  `synthCodeBuildDefaults` with STANDARD_7_0 + `runtime-versions` nodejs 22 / corretto21, `env: USER_MGMT_ACCOUNT`
+- `bin/infra.ts` now creates only `UserManagement-Pipeline`; beta lives inside it
+- The construct path changed once more (`UserManagement-Pipeline/beta/…`): same harmless diff as 3.2 (I should have
+  warned about it in 3.2)
+- **Problem:** `get-pipeline-state` → `PipelineNotFoundException`. **Cause:** files not yet committed, local `main` 3 commits
+  ahead, `cdk deploy` not run. **Fix:** commit + push first (`git status -sb` with no "ahead"), then deploy
+- `npx cdk deploy UserManagement-Pipeline` (64 s, IAM approval prompt). First run succeeded on its own:
+  Source → Synth (`vite build`, **Tests run: 13, Failures: 0**, `BUILD SUCCESS`; ~3 min) → SelfMutate (no change) →
+  Assets (7: JAR, dist/, index.html + config.json, helper Lambdas) → beta. Smoke checks unchanged
+
+### 3.4: Beta smoke test + self-mutation
+- Stack keeps `public readonly webUrl/apiUrl: CfnOutput` (same construct IDs → no template change)
+- `pipeline.addStage(beta, { post: [ShellStep('SmokeTest', { envFromCfnOutputs, commands }) ] })`; each check is
+  `[ "$(curl -s -o /dev/null -w "%{http_code}" …)" = "200" ]` → non-zero exit fails the step
+- Pushed without `cdk deploy`. Execution history: run on `6953e62` **Cancelled** (WebhookV2) → SelfMutate updated the
+  pipeline → new run on the same commit (StartPipelineExecution) **Succeeded**. SmokeTest log showed the real URLs
+
+### 3.5: Approval + prod
+- Smoke test moved into a `smokeTest(stage)` function; prod stage with `pre: ManualApprovalStep('PromoteToProd')` and
+  `post: smokeTest(prod)`
+- New asset `WebEntry_Asset22` = prod's own `config.json` (same `dist/`, different runtime config)
+- Approved in the console → `UserManagement-prod` CREATE_COMPLETE: table `usermanagement-prod`, new user pool,
+  API stage `/prod`, new CloudFront URL. Prod SmokeTest passed; the prod site footer shows `stage: prod`
+- **Finding:** the approval was made as the **root user** (`Approved by …:root`). Added to the backlog as HIGH
+- **Finding:** prod preflight from `http://localhost:5173` returns 204 too, but `Access-Control-Allow-Origin` is the
+  prod CloudFront URL → the browser blocks it. CORS is enforced by the browser comparing the header
+
+---
+
 ## Gotchas collected
 
 1. zsh: pasted `#` comments, `$VAR` not word-split, `=word` expansion, `$RANDOM` repeats in subshells
@@ -306,17 +374,35 @@ Routes chosen: `POST /v1/users/register`, `GET/PUT /v1/users/profile`.
 18. Vite `VITE_*` values are baked in at build time → use runtime `config.json` for hosted builds
 19. With OAC, missing S3 objects return 403 (not 404); the SPA fallback must cover both
 20. Never cache `index.html` long; only hashed assets
+21. Moving a stack into a Stage/pipeline changes path-derived names (permissions, API deployment, CloudFront origin Id,
+    cr-owned tags). Harmless; only replacement of stateful resources is a red flag
+22. Without an explicit `stackName`, a stack inside a Stage gets a new CloudFormation name → a second copy of everything
+23. Push before deploying a pipeline: its first run pulls `main` from GitHub
+24. A pipeline change shows one "Cancelled" execution (self-mutation restarts the run)
+25. `envFromCfnOutputs` needs the `CfnOutput` object → keep it in a public field on the stack
+26. A CORS preflight can return 204 and still be rejected; check `Access-Control-Allow-Origin`
+27. `get-pipeline-state` is a subcommand: `aws codepipeline get-pipeline-state --name …`
 
 ---
 
 ## Commands cheat sheet
 
 ```bash
-# Build + deploy
-cd services/user-api && mvn package && cd ../../infra
-npx cdk diff UserManagement-beta
-npx cdk deploy UserManagement-beta
-npx cdk destroy UserManagement-beta
+# Deploy = git push (pipeline). Local build + diff before pushing infra changes:
+(cd apps/web && npm run build) && (cd services/user-api && mvn package) && cd infra
+npx cdk list
+npx cdk diff 'UserManagement-Pipeline/beta/UserManagement'
+npx cdk deploy UserManagement-Pipeline        # only the pipeline stack itself, only after git push
+
+# Pipeline status / history
+aws codepipeline get-pipeline-state --name UserManagement-Pipeline \
+  --query 'stageStates[].{Stage:stageName,Status:latestExecution.status}' --output table
+aws codepipeline list-pipeline-executions --pipeline-name UserManagement-Pipeline --max-items 3 \
+  --query 'pipelineExecutionSummaries[].{Status:status,Commit:sourceRevisions[0].revisionId,Trigger:trigger.triggerType}' --output table
+
+# Stack outputs (beta or prod)
+aws cloudformation describe-stacks --stack-name UserManagement-prod \
+  --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output text
 
 # Verify a commit
 git show --stat HEAD
@@ -353,5 +439,5 @@ aws apigateway create-deployment --rest-api-id <id> --stage-name beta
 
 ## Next
 
-Phase 2 is complete. Options: CDK pipeline (`platform/`), optional 2.6 custom domain, or hardening backlog.
-See CLAUDE.md "Current step".
+Phase 3.7: try the pipeline (prod sign-up, a deliberately failing test stops at Synth). Then: hardening (root user
+first), optional 2.6 custom domain, or multi-region DynamoDB. See CLAUDE.md "Current step".

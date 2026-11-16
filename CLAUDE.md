@@ -4,21 +4,25 @@ I'm learning React, AWS CDK, Java Lambda and DynamoDB. Explain what you do, go s
 Claude does not modify code: Claude explains, I make the changes myself.
 
 ## Stack
-- infra/: AWS CDK (TypeScript). Stacks UserManagement-beta and UserManagement-prod
+- infra/: AWS CDK (TypeScript). One app: stack UserManagement-Pipeline, which deploys stages beta and prod
+  (stacks UserManagement-beta, UserManagement-prod)
 - services/user-api/: Java Lambda (Maven, compile with release 21; local JDK is 27)
 - apps/web/: React 19 + Vite + TypeScript SPA, Amplify auth library (hosted on S3 + CloudFront)
-- platform/: CDK pipeline (next); docs/: architecture notes
+- docs/: architecture diagram + work log (no platform/ folder: the pipeline must be in the same CDK app as its stages)
 
 ## Architecture
 ![Architecture](docs/architecture.svg)
 
-Source: [docs/architecture.svg](docs/architecture.svg). Everything shown is deployed (Phases 1 + 2).
+Source: [docs/architecture.svg](docs/architecture.svg). Everything shown is deployed (Phases 1–3).
 History of what was built: [docs/WORKLOG.md](docs/WORKLOG.md).
 
 ## Decisions
 - Build order: infra → backend → frontend
-- One AWS account for now (456423665721, us-west-2); separate beta/prod accounts later via AWS Organizations
-- AWS account comes from env var USER_MGMT_ACCOUNT (set in ~/.zshrc; validated as 12 digits in environments.ts). Pipeline will need it too.
+- One AWS account for now (456423665721, us-west-2): pipeline, beta and prod all live there (decided in 3.0:
+  multi-account is overkill while learning). Later path: AWS Organizations + prod account, `cdk bootstrap --trust`,
+  `crossAccountKeys: true`, per-stage accounts in environments.ts
+- AWS account comes from env var USER_MGMT_ACCOUNT (set in ~/.zshrc; validated as 12 digits in environments.ts).
+  The pipeline passes it to CodeBuild (`env: { USER_MGMT_ACCOUNT: this.account }`)
 - Config pattern: infra/config/types.ts + environments.ts (stage, env, retainData, pointInTimeRecovery, lambda, api, web.allowedOrigins)
 - DynamoDB single-table design: table `usermanagement-${stage}`, keys pk/sk, GSI1 (gsi1pk/gsi1sk), PAY_PER_REQUEST
 - No VPC (DynamoDB is reached over IAM + HTTPS)
@@ -54,8 +58,31 @@ History of what was built: [docs/WORKLOG.md](docs/WORKLOG.md).
   JSON log format with levels, JAVA_TOOL_OPTIONS tiered compilation (level 1)
 - SnapStart on published versions; API Gateway calls alias `live`; priming via CRaC beforeCheckpoint must be
   READ-ONLY (runs once per snapshot, possibly several times)
-- Build before deploy (order matters): `npm run build` in apps/web → `mvn package` in services/user-api →
-  `cdk deploy` in infra. CDK synth fails if dist/index.html or the JAR is missing. Chain with `&&` (pipeline will automate)
+- Build before synth (order matters): `npm run build` in apps/web → `mvn package` in services/user-api →
+  `cdk synth/diff` in infra. CDK synth fails if dist/index.html or the JAR is missing. Chain with `&&`.
+  The pipeline's Synth step runs exactly this; locally it's only needed for `cdk diff`
+- Pipeline (CDK Pipelines, infra/lib/pipeline-stack.ts, config in infra/config/pipeline.ts):
+  - Source: GitHub bappi2/user-management-aws `main` via CodeConnections (GitHub App, no token in AWS)
+  - Synth: CodeBuild STANDARD_7_0, runtime-versions nodejs 22 + corretto21; subshell commands
+    `(cd apps/web && npm ci && npm run build)`, `(cd services/user-api && mvn -B package)` (13 tests gate the deploy),
+    `(cd infra && npm ci && npx cdk synth)`; primaryOutputDirectory infra/cdk.out
+  - Pipeline type V2, crossAccountKeys false (one account, no KMS key), self-mutating (UpdatePipeline stage)
+  - Stages: beta (post: SmokeTest) → prod (pre: ManualApprovalStep PromoteToProd, post: SmokeTest)
+  - SmokeTest (shared `smokeTest(stage)` function): WebUrl 200, /config.json 200, profile without token 401,
+    CORS preflight from WebUrl 204. URLs via `envFromCfnOutputs` (stack exposes `webUrl`/`apiUrl` CfnOutputs)
+  - `UserManagementStage` (cdk.Stage) wraps the stack + tags; keeps `stackName: UserManagement-${stage}`
+  - Deploy from the laptop ONLY for the pipeline stack itself (`npx cdk deploy UserManagement-Pipeline`), and only
+    after pushing (first run pulls main). Everything else: `git push`. Approve prod in the console
+- GOTCHA: changing the construct path (stack → Stage → pipeline) changes path-derived names: Lambda::Permission IDs,
+  API Deployment hash, CloudFront origin Id, BucketDeployment `aws-cdk:cr-owned` tags. Harmless (no stateful
+  resource replaced). Rule for `cdk diff`: red flag only if table / user pool / bucket / distribution is replaced
+- GOTCHA: a push that changes the pipeline itself shows a "Cancelled" execution: SelfMutate updates the pipeline,
+  cancels the old run and restarts on the same commit. App-only changes run straight through
+- GOTCHA: `envFromCfnOutputs` needs the `CfnOutput` object, so the stack must keep it in a public field
+  (`this.webUrl = new CfnOutput(...)`); same construct ID = no template change
+- GOTCHA: CORS preflight returns 204 even for a disallowed origin; API Gateway answers with
+  `Access-Control-Allow-Origin` set to an allowed origin and the BROWSER blocks the mismatch. Check the header, not the status
+  (prod allows only its CloudFront URL, so localhost can't call the prod API)
 - Frontend:
   - Amplify auth library only (no Amplify CLI/backend/hosting): signUp, confirmSignUp, signIn (SRP), signOut,
     fetchAuthSession (auto-refreshes tokens). Tokens stored in localStorage (Amplify default)
@@ -72,12 +99,16 @@ History of what was built: [docs/WORKLOG.md](docs/WORKLOG.md).
   `public, max-age=31536000, immutable`; index.html + config.json `no-cache` + invalidated on deploy (two BucketDeployments, prune false)
 - Security headers (ResponseHeadersPolicy): HSTS 1y, CSP `default-src 'self'; script-src 'self'; style-src 'self';
   connect-src 'self' https://*.amazonaws.com; frame-ancestors 'none'`, X-Frame-Options DENY, nosniff, referrer policy
-- Hardening backlog: Powertools (logging, metrics, tracing, idempotency); DynamoDB Local/Testcontainers tests;
+- Hardening backlog: HIGH: stop using the root user (MFA on root, IAM Identity Center admin for console/CLI/approvals;
+  prod was approved as root in 3.5); pipeline notifications (SNS/chatbot on approval waiting + failure);
+  CodeBuild cache for npm/Maven; smoke test: route check via `get-export` + real sign-in (test user);
+  Powertools (logging, metrics, tracing, idempotency); DynamoDB Local/Testcontainers tests;
   CodeDeploy canary on alias; disable USER_PASSWORD_AUTH in prod; SES for Cognito email; $default model or reject
-  non-JSON content types; sync profile email when Cognito email changes; post-deploy stage check in pipeline;
+  non-JSON content types; sync profile email when Cognito email changes;
   tokens in cookies (Amplify CookieStorage) instead of localStorage; update typescript-eslint when minimatch fix ships;
   custom domain + ACM (optional 2.6); multi-region DynamoDB later (TableV2 replicas; Lambda/API/Cognito are regional)
-- Prod readiness (before real users): retainData true, PITR on, table deletionProtection, separate account, deploy via pipeline
+- Prod readiness (before real users): retainData true, PITR on, table deletionProtection, separate account
+  (deploy via pipeline: done in 3.5)
 
 ## Done
 - 1.2: CDK app, stage config, DynamoDB table (deployed, tested, destroyed)
@@ -95,8 +126,15 @@ History of what was built: [docs/WORKLOG.md](docs/WORKLOG.md).
 - 2.3: Amplify auth: sign up, confirm code, sign in (SRP, password never sent), sign out, session survives reload
 - 2.4: Profile page: GET/PUT /v1/users/profile with ID token, gateway vs Java validation errors, session-expired handling
 - 2.5: S3 + CloudFront hosting (OAC, security headers, cache rules, SPA fallback) + runtime config.json.
-  Live at the stack's WebUrl output (beta stack currently deployed)
+  Live at the stack's WebUrl output
+
+- 3.0: Decided: one account for now (two-account layout drafted, then dropped)
+- 3.1: GitHub connection (CodeConnections, AVAILABLE)
+- 3.2: UserManagementStage wraps the stack (stackName kept; path-churn diff reviewed, deployed, smoke-checked)
+- 3.3: Pipeline stack (Source, Synth with React + Java + CDK, self-mutation, beta stage); deployed once from laptop
+- 3.4: Beta SmokeTest via envFromCfnOutputs (added by git push → self-mutation)
+- 3.5: Manual approval + prod stage + prod SmokeTest. Prod live (UserManagement-prod, its own pool/table/CloudFront URL)
 
 ## Current step
-Phase 2 (frontend) is complete. Next: choose between the CDK pipeline (platform/: build React + Java, deploy beta,
-approval, deploy prod), optional 2.6 custom domain, or hardening backlog items.
+3.7: try the pipeline: sign up on prod; break a JUnit test on purpose → pipeline stops at Synth, beta/prod untouched;
+revert. Then choose: hardening (root user first), optional 2.6 custom domain, or multi-region DynamoDB.
