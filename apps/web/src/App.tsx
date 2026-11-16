@@ -61,7 +61,10 @@ function App() {
         />
       )}
 
-      {view.name === 'signedIn' && <SignedIn onSignedOut={() => setView({ name: 'signIn' })} />}
+      {view.name === 'signedIn' && (
+        <SignedIn onSignedOut={(message) => setView({ name: 'signIn', message })} />
+      )}
+
 
       <footer className="hint">stage: {config.stage} · API: {config.apiUrl}</footer>
     </main>

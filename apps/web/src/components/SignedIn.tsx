@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { fetchAuthSession, signOut } from 'aws-amplify/auth';
+import { ProfilePage } from './ProfilePage';
+
 
 type Claims = { email: string; sub: string; expiresAt: Date | null };
 
 type Props = {
-  onSignedOut: () => void;
+  onSignedOut: (message?: string) => void;
 };
 
 export function SignedIn({ onSignedOut }: Props) {
@@ -32,6 +34,12 @@ export function SignedIn({ onSignedOut }: Props) {
     onSignedOut();
   }
 
+async function handleSessionExpired() {
+    await signOut();
+    onSignedOut('Your session expired. Please sign in again.');
+  }
+
+
   return (
     <section>
       <h2>Signed in</h2>
@@ -46,7 +54,8 @@ export function SignedIn({ onSignedOut }: Props) {
       ) : (
         <p className="hint">Loading session…</p>
       )}
-      <p className="hint">Profile page (GET/PUT /v1/users/profile) comes in 2.4.</p>
+      <ProfilePage onSessionExpired={handleSessionExpired} />
+
       <button onClick={handleSignOut}>Sign out</button>
     </section>
   );
