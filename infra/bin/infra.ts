@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib/core';
-import { UserManagementStage } from '../lib/user-management-stage';
-import { STAGES } from '../config/environments';
+import { PipelineStack } from '../lib/pipeline-stack';
+import { PIPELINE } from '../config/pipeline';
 
 const app = new cdk.App();
 
-for (const config of Object.values(STAGES)) {
-  new UserManagementStage(app, config.stage, { config });
-}
+const pipeline = new PipelineStack(app, 'UserManagement-Pipeline', { env: PIPELINE.env });
+cdk.Tags.of(pipeline).add('Project', 'user-management');
+cdk.Tags.of(pipeline).add('Developer', 'mmeftauddin');
+cdk.Tags.of(pipeline).add('ManagedBy', 'cdk');
