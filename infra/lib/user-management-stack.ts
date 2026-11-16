@@ -23,6 +23,9 @@ export interface UserManagementStackProps extends StackProps {
 
 export class UserManagementStack extends Stack {
   public readonly table: dynamodb.TableV2;
+  public readonly webUrl: CfnOutput;
+  public readonly apiUrl: CfnOutput;
+
 
   constructor(scope: Construct, id: string, props: UserManagementStackProps) {
     super(scope, id, props);
@@ -354,9 +357,11 @@ export class UserManagementStack extends Stack {
       distributionPaths: ['/index.html', '/config.json'],
     });
 
-    new CfnOutput(this, 'WebUrl', { value: webOrigin });
+    this.webUrl = new CfnOutput(this, 'WebUrl', { value: webOrigin });
 
-    new CfnOutput(this, 'ApiUrl', { value: api.url });
+
+    this.apiUrl = new CfnOutput(this, 'ApiUrl', { value: api.url });
+
 
   }
 }
