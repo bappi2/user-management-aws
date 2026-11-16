@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1230" height="820" viewBox="0 0 1230 820" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1230" height="1200" viewBox="0 0 1230 1200" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#232F3E"/>
@@ -19,18 +19,20 @@
   </defs>
 
   <!-- background -->
-  <rect x="0" y="0" width="1230" height="820" fill="#FFFFFF"/>
+  <rect x="0" y="0" width="1230" height="1200" fill="#FFFFFF"/>
 
   <!-- title + legend -->
   <text x="30" y="38" class="title">user-management-aws · architecture</text>
-  <line x1="820" y1="33" x2="860" y2="33" stroke="#232F3E" stroke-width="1.8"/>
-  <text x="868" y="37" class="small">request / data flow</text>
-  <line x1="1000" y1="33" x2="1040" y2="33" stroke="#8A8F98" stroke-width="1.4"/>
-  <text x="1048" y="37" class="small">logs</text>
+  <line x1="700" y1="33" x2="740" y2="33" stroke="#232F3E" stroke-width="1.8"/>
+  <text x="748" y="37" class="small">request / data flow</text>
+  <line x1="880" y1="33" x2="920" y2="33" stroke="#8A8F98" stroke-width="1.4"/>
+  <text x="928" y="37" class="small">logs</text>
+  <line x1="990" y1="33" x2="1030" y2="33" stroke="#8A8F98" stroke-width="1.6" stroke-dasharray="6 5"/>
+  <text x="1038" y="37" class="small">planned (pipeline)</text>
 
   <!-- AWS region frame -->
-  <rect x="270" y="70" width="930" height="730" rx="10" fill="#F7FAFA" stroke="#00A4A6" stroke-width="1.5" stroke-dasharray="8 5"/>
-  <text x="286" y="92" font-size="13" font-weight="700" fill="#00A4A6">AWS Cloud · us-west-2</text>
+  <rect x="270" y="70" width="930" height="930" rx="10" fill="#F7FAFA" stroke="#00A4A6" stroke-width="1.5" stroke-dasharray="8 5"/>
+  <text x="286" y="92" font-size="13" font-weight="700" fill="#00A4A6">AWS account 1 · tooling + beta · us-west-2</text>
 
   <!-- ============ Client side ============ -->
   <!-- Browser -->
@@ -48,8 +50,9 @@
   <text x="42" y="668" class="hdr">Developer laptop</text>
   <text x="42" y="696" class="txt">mvn package (JAR)</text>
   <text x="42" y="714" class="txt">npx cdk deploy</text>
+  <text x="42" y="732" class="small">git push → pipeline (planned)</text>
 
-  <!-- ============ Planned hosting (top row) ============ -->
+  <!-- ============ Hosting (top row) ============ -->
   <!-- CloudFront -->
   <rect x="300" y="100" width="210" height="110" rx="8" fill="#FFFFFF" stroke="#8C4FFF" stroke-width="1.5"/>
   <rect x="300" y="100" width="210" height="26" rx="8" fill="#8C4FFF"/><rect x="300" y="114" width="210" height="12" fill="#8C4FFF"/>
@@ -139,7 +142,7 @@
   <rect x="300" y="650" width="580" height="90" rx="8" fill="#FFFFFF" stroke="#E7157B" stroke-width="1.5"/>
   <rect x="300" y="650" width="580" height="26" rx="8" fill="#E7157B"/><rect x="300" y="664" width="580" height="12" fill="#E7157B"/>
   <text x="312" y="668" class="hdr">AWS CloudFormation · AWS CDK</text>
-  <text x="312" y="696" class="txt">Stack UserManagement-beta: creates and updates every resource in this diagram</text>
+  <text x="312" y="696" class="txt">Stack UserManagement-beta: creates and updates every resource above</text>
   <text x="312" y="714" class="txt">JAR + assets uploaded to the CDK bootstrap bucket (CDKToolkit)</text>
   <text x="312" y="732" class="small">RemovalPolicy.DESTROY while learning · npx cdk destroy removes everything</text>
 
@@ -190,4 +193,78 @@
   <text x="972" y="736" class="small">5  Authorizer verifies the JWT</text>
   <text x="972" y="752" class="small">6  Proxy to Lambda alias live</text>
   <text x="972" y="768" class="small">7  GetItem / UpdateItem</text>
+
+  <!-- ============ Delivery pipeline (planned) ============ -->
+  <!-- GitHub -->
+  <rect x="30" y="880" width="200" height="90" rx="8" fill="#FFFFFF" stroke="#24292F" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <rect x="30" y="880" width="200" height="26" rx="8" fill="#24292F"/><rect x="30" y="894" width="200" height="12" fill="#24292F"/>
+  <text x="42" y="898" class="hdr">GitHub</text>
+  <text x="42" y="926" class="txt">bappi2/user-management-aws</text>
+  <text x="42" y="944" class="txt">branch main</text>
+  <text x="42" y="960" class="small">AWS Connector app (read only)</text>
+  <path d="M130 740 V878" class="plan"/>
+  <text x="138" y="815" class="small">git push</text>
+  <path d="M230 925 H308" class="plan"/>
+
+  <!-- CodePipeline -->
+  <rect x="295" y="825" width="890" height="160" rx="8" fill="#FFFFFF" stroke="#8A8F98" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="310" y="848" font-size="13" font-weight="700" fill="#232F3E">AWS CodePipeline (V2) · UserManagement-Pipeline · CDK Pipelines</text>
+  <text x="310" y="866" class="small">Runs on every push to main · same CDK app as the stacks (infra/lib/pipeline-stack.ts)</text>
+  <rect x="310" y="880" width="104" height="90" rx="6" fill="#F7FAFA" stroke="#8A8F98" stroke-width="1.2"/>
+  <text x="318" y="898" font-size="12" font-weight="700" fill="#232F3E">1  Source</text>
+  <text x="318" y="916" class="small">GitHub main</text>
+  <text x="318" y="932" class="small">CodeConnections</text>
+  <path d="M414 925 H434" class="plan"/>
+  <rect x="436" y="880" width="104" height="90" rx="6" fill="#F7FAFA" stroke="#8A8F98" stroke-width="1.2"/>
+  <text x="444" y="898" font-size="12" font-weight="700" fill="#232F3E">2  Synth</text>
+  <text x="444" y="916" class="small">CodeBuild</text>
+  <text x="444" y="932" class="small">npm · mvn · cdk</text>
+  <text x="444" y="948" class="small">tests must pass</text>
+  <path d="M540 925 H560" class="plan"/>
+  <rect x="562" y="880" width="104" height="90" rx="6" fill="#F7FAFA" stroke="#8A8F98" stroke-width="1.2"/>
+  <text x="570" y="898" font-size="12" font-weight="700" fill="#232F3E">3  Update</text>
+  <text x="570" y="916" class="small">pipeline updates</text>
+  <text x="570" y="932" class="small">itself (self-</text>
+  <text x="570" y="948" class="small">mutation)</text>
+  <path d="M666 925 H686" class="plan"/>
+  <rect x="688" y="880" width="104" height="90" rx="6" fill="#F7FAFA" stroke="#8A8F98" stroke-width="1.2"/>
+  <text x="696" y="898" font-size="12" font-weight="700" fill="#232F3E">4  Assets</text>
+  <text x="696" y="916" class="small">JAR + dist/ to</text>
+  <text x="696" y="932" class="small">bootstrap bucket</text>
+  <path d="M792 925 H812" class="plan"/>
+  <rect x="814" y="880" width="104" height="90" rx="6" fill="#F7FAFA" stroke="#8A8F98" stroke-width="1.2"/>
+  <text x="822" y="898" font-size="12" font-weight="700" fill="#232F3E">5  Beta</text>
+  <text x="822" y="916" class="small">deploy beta</text>
+  <text x="822" y="932" class="small">smoke test</text>
+  <text x="822" y="948" class="small">(curl 200 / 401)</text>
+  <path d="M918 925 H938" class="plan"/>
+  <rect x="940" y="880" width="104" height="90" rx="6" fill="#F7FAFA" stroke="#8A8F98" stroke-width="1.2"/>
+  <text x="948" y="898" font-size="12" font-weight="700" fill="#232F3E">6  Approve</text>
+  <text x="948" y="916" class="small">manual</text>
+  <text x="948" y="932" class="small">approval</text>
+  <text x="948" y="948" class="small">(console)</text>
+  <path d="M1044 925 H1064" class="plan"/>
+  <rect x="1066" y="880" width="104" height="90" rx="6" fill="#F7FAFA" stroke="#8A8F98" stroke-width="1.2"/>
+  <text x="1074" y="898" font-size="12" font-weight="700" fill="#232F3E">7  Prod</text>
+  <text x="1074" y="916" class="small">deploy prod</text>
+  <text x="1074" y="932" class="small">cross-account</text>
+
+  <!-- pipeline deploys beta (account 1) -->
+  <path d="M866 880 V742" class="plan"/>
+  <text x="872" y="800" class="small">deploy beta</text>
+
+
+  <!-- ============ Prod account (planned) ============ -->
+  <rect x="270" y="1030" width="930" height="150" rx="10" fill="#F7FAFA" stroke="#8A8F98" stroke-width="1.5" stroke-dasharray="8 5"/>
+  <text x="286" y="1052" font-size="13" font-weight="700" fill="#545B64">AWS account 2 · prod · us-west-2 (planned)</text>
+  <rect x="300" y="1068" width="880" height="96" rx="8" fill="#FFFFFF" stroke="#E7157B" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <rect x="300" y="1068" width="880" height="26" rx="8" fill="#E7157B"/><rect x="300" y="1082" width="880" height="12" fill="#E7157B"/>
+  <text x="312" y="1086" class="hdr">Stack UserManagement-prod</text>
+  <text x="312" y="1114" class="txt">Same resources as account 1: Cognito, API Gateway, 2 Lambdas, DynamoDB, CloudFront + S3</text>
+  <text x="312" y="1132" class="txt">Own user pool, table and CloudFront URL · no data or IAM shared with beta</text>
+  <text x="312" y="1152" class="small">Deployed only by the pipeline, after manual approval · nobody runs cdk deploy here by hand</text>
+
+  <!-- pipeline deploys prod (account 2) -->
+  <path d="M1118 970 V1066" class="plan"/>
+  <text x="1110" y="1019" class="small" text-anchor="end">cross-account deploy role (cdk bootstrap --trust account 1)</text>
 </svg>
