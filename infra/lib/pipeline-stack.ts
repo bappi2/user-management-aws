@@ -7,6 +7,24 @@ import { PIPELINE } from '../config/pipeline';
 import { STAGES } from '../config/environments';
 import { UserManagementStage } from './user-management-stage';
 
+/** Post-deploy checks for one stage: site, runtime config, authorizer, CORS. */
+function smokeTest(stage: UserManagementStage): pipelines.ShellStep {
+  return new pipelines.ShellStep('SmokeTest', {
+    envFromCfnOutputs: {
+      WEB_URL: stage.stack.webUrl,
+      API_URL: stage.stack.apiUrl,
+    },
+    commands: [
+      'echo "Testing $WEB_URL and $API_URL"',
+      '[ "$(curl -s -o /dev/null -w "%{http_code}" "$WEB_URL")" = "200" ]',
+      '[ "$(curl -s -o /dev/null -w "%{http_code}" "$WEB_URL/config.json")" = "200" ]',
+      '[ "$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}v1/users/profile")" = "401" ]',
+      '[ "$(curl -s -o /dev/null -w "%{http_code}" -X OPTIONS -H "Origin: $WEB_URL" -H "Access-Control-Request-Method: GET" "${API_URL}v1/users/profile")" = "204" ]',
+    ],
+  });
+}
+
+
 export class PipelineStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
@@ -43,25 +61,16 @@ export class PipelineStack extends Stack {
     });
 
     const beta = new UserManagementStage(this, 'beta', { config: STAGES.beta });
+    pipeline.addStage(beta, { post: [smokeTest(beta)] });
 
-    pipeline.addStage(beta, {
-      // runs after beta is deployed; any failing command stops the pipeline
-      post: [
-        new pipelines.ShellStep('SmokeTest', {
-          envFromCfnOutputs: {
-            WEB_URL: beta.stack.webUrl,
-            API_URL: beta.stack.apiUrl,
-          },
-          commands: [
-            'echo "Testing $WEB_URL and $API_URL"',
-            '[ "$(curl -s -o /dev/null -w "%{http_code}" "$WEB_URL")" = "200" ]',
-            '[ "$(curl -s -o /dev/null -w "%{http_code}" "$WEB_URL/config.json")" = "200" ]',
-            '[ "$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}v1/users/profile")" = "401" ]',
-            '[ "$(curl -s -o /dev/null -w "%{http_code}" -X OPTIONS -H "Origin: $WEB_URL" -H "Access-Control-Request-Method: GET" "${API_URL}v1/users/profile")" = "204" ]',
-          ],
-        }),
-      ],
+    const prod = new UserManagementStage(this, 'prod', { config: STAGES.prod });
+    pipeline.addStage(prod, {
+      pre: [new pipelines.ManualApprovalStep('PromoteToProd', {
+        comment: 'Beta deployed and smoke-tested. Deploy this commit to prod?',
+      })],
+      post: [smokeTest(prod)],
     });
+
 
   }
 }
