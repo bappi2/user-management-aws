@@ -8,6 +8,12 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as apigw from 'aws-cdk-lib/aws-apigateway';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as fs from 'fs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+
 
 
 
@@ -84,6 +90,50 @@ export class UserManagementStack extends Stack {
 
     new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new CfnOutput(this, 'UserPoolClientId', { value: webClient.userPoolClientId });
+    
+    // ---------- Web hosting: private S3 bucket + CloudFront (Origin Access Control) ----------
+    const webBucket = new s3.Bucket(this, 'WebBucket', {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,   // lets `cdk destroy` delete a non-empty bucket
+    });
+
+    const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'WebSecurityHeaders', {
+      securityHeadersBehavior: {
+        strictTransportSecurity: { accessControlMaxAge: Duration.days(365), includeSubdomains: true, override: true },
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
+        contentSecurityPolicy: {
+          contentSecurityPolicy:
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
+            "connect-src 'self' https://*.amazonaws.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+          override: true,
+        },
+      },
+    });
+
+    const distribution = new cloudfront.Distribution(this, 'WebDistribution', {
+      defaultRootObject: 'index.html',
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(webBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        responseHeadersPolicy: securityHeaders,
+        compress: true,
+      },
+      // SPA: unknown paths → index.html (S3 + OAC answers 403 for missing keys)
+      errorResponses: [
+        { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: Duration.seconds(0) },
+        { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: Duration.seconds(0) },
+      ],
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_100,   // US/Canada/Europe edges only (cheapest)
+    });
+
+    const webOrigin = `https://${distribution.distributionDomainName}`;
+    const allowedOrigins = [...config.web.allowedOrigins, webOrigin];   // localhost (beta) + CloudFront
 
 
     const functionName = `usermanagement-${config.stage}-api`;
@@ -116,7 +166,7 @@ export class UserManagementStack extends Stack {
       logGroup,
       environment: {
         ...javaFunctionProps.environment,
-        ALLOWED_ORIGINS: config.web.allowedOrigins.join(','),
+        ALLOWED_ORIGINS: allowedOrigins.join(','),
       },
     });
 
@@ -166,14 +216,13 @@ export class UserManagementStack extends Stack {
         throttlingRateLimit: config.api.throttleRateLimit,
         throttlingBurstLimit: config.api.throttleBurstLimit,
       },
-      ...(config.web.allowedOrigins.length > 0 && {
-        defaultCorsPreflightOptions: {
-          allowOrigins: config.web.allowedOrigins,
-          allowMethods: ['GET', 'PUT', 'OPTIONS'],
-          allowHeaders: ['Content-Type', 'Authorization'],
-          maxAge: Duration.hours(1),
-        },
-      }),
+      defaultCorsPreflightOptions: {
+        allowOrigins: allowedOrigins,
+        allowMethods: ['GET', 'PUT', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization'],
+        maxAge: Duration.hours(1),
+      },
+
 
     });
         
@@ -275,6 +324,37 @@ export class UserManagementStack extends Stack {
 
 
  
+    // ---------- Upload the built React app ----------
+    const webDist = path.join(__dirname, '../../apps/web/dist');
+
+    // Hashed JS/CSS: cache for a year (a new build = new file names)
+    new s3deploy.BucketDeployment(this, 'WebAssets', {
+      sources: [s3deploy.Source.asset(webDist, { exclude: ['index.html'] })],
+      destinationBucket: webBucket,
+      cacheControl: [s3deploy.CacheControl.fromString('public, max-age=31536000, immutable')],
+      prune: false,
+    });
+
+    // index.html + runtime config: never cached, so a new deploy is visible immediately
+    new s3deploy.BucketDeployment(this, 'WebEntry', {
+      sources: [
+        s3deploy.Source.data('index.html', fs.readFileSync(path.join(webDist, 'index.html'), 'utf8')),
+        s3deploy.Source.jsonData('config.json', {
+          stage: config.stage,
+          region: this.region,
+          apiUrl: api.url,
+          userPoolId: userPool.userPoolId,
+          userPoolClientId: webClient.userPoolClientId,
+        }),
+      ],
+      destinationBucket: webBucket,
+      cacheControl: [s3deploy.CacheControl.noCache()],
+      prune: false,
+      distribution,
+      distributionPaths: ['/index.html', '/config.json'],
+    });
+
+    new CfnOutput(this, 'WebUrl', { value: webOrigin });
 
     new CfnOutput(this, 'ApiUrl', { value: api.url });
 

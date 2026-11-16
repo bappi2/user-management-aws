@@ -1,17 +1,40 @@
-type EnvKey = keyof ImportMetaEnv & `VITE_${string}`;
+export type AppConfig = {
+  stage: string;
+  region: string;
+  apiUrl: string;
+  userPoolId: string;
+  userPoolClientId: string;
+};
 
-function required(name: EnvKey): string {
-  const value = import.meta.env[name];
-  if (!value) {
-    throw new Error(`Missing ${name}. Run: scripts/env-from-stack.sh beta`);
+const KEYS = ['stage', 'region', 'apiUrl', 'userPoolId', 'userPoolClientId'] as const;
+
+/** Filled by loadConfig() BEFORE the app renders; import and use it anywhere after that. */
+export const config: AppConfig = { stage: '', region: '', apiUrl: '', userPoolId: '', userPoolClientId: '' };
+
+/**
+ * npm run dev  → values from .env.local (scripts/env-from-stack.sh)
+ * hosted build → /config.json, written into the bucket by CDK at deploy time
+ */
+export async function loadConfig(): Promise<void> {
+  const loaded: Partial<AppConfig> = import.meta.env.DEV
+    ? {
+        stage: import.meta.env.VITE_STAGE,
+        region: import.meta.env.VITE_AWS_REGION,
+        apiUrl: import.meta.env.VITE_API_URL,
+        userPoolId: import.meta.env.VITE_USER_POOL_ID,
+        userPoolClientId: import.meta.env.VITE_USER_POOL_CLIENT_ID,
+      }
+    : await fetch('/config.json', { cache: 'no-store' }).then((response) => {
+        if (!response.ok) {
+          throw new Error(`Could not load /config.json (HTTP ${response.status})`);
+        }
+        return response.json();
+      });
+
+  for (const key of KEYS) {
+    if (!loaded[key]) {
+      throw new Error(`Missing config value "${key}"`);
+    }
   }
-  return value;
+  Object.assign(config, loaded);
 }
-
-export const config = {
-  stage: required('VITE_STAGE'),
-  region: required('VITE_AWS_REGION'),
-  apiUrl: required('VITE_API_URL'),
-  userPoolId: required('VITE_USER_POOL_ID'),
-  userPoolClientId: required('VITE_USER_POOL_CLIENT_ID'),
-} as const;
