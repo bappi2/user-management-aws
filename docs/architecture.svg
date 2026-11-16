@@ -24,9 +24,9 @@
   <!-- title + legend -->
   <text x="30" y="38" class="title">user-management-aws · architecture</text>
   <line x1="820" y1="33" x2="860" y2="33" stroke="#232F3E" stroke-width="1.8"/>
-  <text x="868" y="37" class="small">deployed (Phase 1)</text>
-  <line x1="990" y1="33" x2="1030" y2="33" stroke="#8A8F98" stroke-width="1.6" stroke-dasharray="6 5"/>
-  <text x="1038" y="37" class="small">planned (Phase 2)</text>
+  <text x="868" y="37" class="small">request / data flow</text>
+  <line x1="1000" y1="33" x2="1040" y2="33" stroke="#8A8F98" stroke-width="1.4"/>
+  <text x="1048" y="37" class="small">logs</text>
 
   <!-- AWS region frame -->
   <rect x="270" y="70" width="930" height="730" rx="10" fill="#F7FAFA" stroke="#00A4A6" stroke-width="1.5" stroke-dasharray="8 5"/>
@@ -38,8 +38,8 @@
   <rect x="30" y="330" width="200" height="26" rx="8" fill="#232F3E"/><rect x="30" y="344" width="200" height="12" fill="#232F3E"/>
   <text x="42" y="348" class="hdr">Browser</text>
   <text x="42" y="376" class="txt">React SPA (apps/web)</text>
-  <text x="42" y="394" class="txt">Vite + TypeScript</text>
-  <text x="42" y="412" class="txt">Amplify auth (planned)</text>
+  <text x="42" y="394" class="txt">Amplify auth (SRP)</text>
+  <text x="42" y="412" class="txt">Loads /config.json first</text>
   <text x="42" y="430" class="small">ID token in Authorization header</text>
 
   <!-- Developer -->
@@ -51,19 +51,22 @@
 
   <!-- ============ Planned hosting (top row) ============ -->
   <!-- CloudFront -->
-  <rect x="300" y="100" width="210" height="100" rx="8" fill="#FFFFFF" stroke="#8C4FFF" stroke-width="1.5" stroke-dasharray="6 5"/>
-  <rect x="300" y="100" width="210" height="26" rx="8" fill="#8C4FFF" opacity="0.6"/><rect x="300" y="114" width="210" height="12" fill="#8C4FFF" opacity="0.6"/>
-  <text x="312" y="118" class="hdr">Amazon CloudFront (planned)</text>
-  <text x="312" y="146" class="txt">HTTPS · caches hashed assets</text>
-  <text x="312" y="164" class="txt">SPA fallback to index.html</text>
-  <text x="312" y="182" class="small">optional custom domain + ACM</text>
+  <rect x="300" y="100" width="210" height="110" rx="8" fill="#FFFFFF" stroke="#8C4FFF" stroke-width="1.5"/>
+  <rect x="300" y="100" width="210" height="26" rx="8" fill="#8C4FFF"/><rect x="300" y="114" width="210" height="12" fill="#8C4FFF"/>
+  <text x="312" y="118" class="hdr">Amazon CloudFront</text>
+  <text x="312" y="146" class="txt">HTTPS only · SPA fallback</text>
+  <text x="312" y="164" class="txt">HSTS, CSP, X-Frame-Options</text>
+  <text x="312" y="182" class="txt">Assets cached 1 year</text>
+  <text x="312" y="200" class="small">index.html + config.json no-cache</text>
 
   <!-- S3 -->
-  <rect x="560" y="100" width="210" height="100" rx="8" fill="#FFFFFF" stroke="#7AA116" stroke-width="1.5" stroke-dasharray="6 5"/>
-  <rect x="560" y="100" width="210" height="26" rx="8" fill="#7AA116" opacity="0.6"/><rect x="560" y="114" width="210" height="12" fill="#7AA116" opacity="0.6"/>
-  <text x="572" y="118" class="hdr">Amazon S3 (planned)</text>
-  <text x="572" y="146" class="txt">Private bucket</text>
+  <rect x="560" y="100" width="210" height="110" rx="8" fill="#FFFFFF" stroke="#7AA116" stroke-width="1.5"/>
+  <rect x="560" y="100" width="210" height="26" rx="8" fill="#7AA116"/><rect x="560" y="114" width="210" height="12" fill="#7AA116"/>
+  <text x="572" y="118" class="hdr">Amazon S3</text>
+  <text x="572" y="146" class="txt">Private bucket (block all)</text>
   <text x="572" y="164" class="txt">React build (dist/)</text>
+  <text x="572" y="182" class="txt">config.json written by CDK</text>
+  <text x="572" y="200" class="small">read only via OAC</text>
 
   <!-- IAM -->
   <rect x="960" y="100" width="220" height="120" rx="8" fill="#FFFFFF" stroke="#DD344C" stroke-width="1.5"/>
@@ -113,7 +116,7 @@
   <text x="312" y="522" class="txt">Cognito authorizer</text>
   <text x="312" y="540" class="txt">Body validator (JSON model)</text>
   <text x="312" y="558" class="txt">Throttle 10 rps · burst 20</text>
-  <text x="312" y="576" class="small">Problem Details errors · HTTPS</text>
+  <text x="312" y="576" class="small">CORS · Problem Details errors</text>
 
   <!-- API Lambda -->
   <rect x="640" y="450" width="240" height="140" rx="8" fill="#FFFFFF" stroke="#ED7100" stroke-width="1.5"/>
@@ -141,10 +144,11 @@
   <text x="312" y="732" class="small">RemovalPolicy.DESTROY while learning · npx cdk destroy removes everything</text>
 
   <!-- ============ Arrows ============ -->
-  <!-- planned: browser loads the app from CloudFront, CloudFront reads S3 -->
-  <path d="M130 330 V150 H298" class="plan"/>
-  <text x="140" y="142" class="small">load app (planned)</text>
-  <path d="M510 150 H558" class="plan"/>
+  <!-- browser loads the app + config.json from CloudFront, CloudFront reads S3 via OAC -->
+  <path d="M130 330 V150 H298" class="flow"/>
+  <text x="140" y="142" class="small">load app (HTTPS)</text>
+  <path d="M510 155 H558" class="flow"/>
+  <text x="520" y="148" class="small">OAC</text>
 
   <!-- 1: browser to Cognito -->
   <path d="M230 365 L298 331" class="flow"/>

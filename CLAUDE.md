@@ -6,20 +6,20 @@ Claude does not modify code: Claude explains, I make the changes myself.
 ## Stack
 - infra/: AWS CDK (TypeScript). Stacks UserManagement-beta and UserManagement-prod
 - services/user-api/: Java Lambda (Maven, compile with release 21; local JDK is 27)
-- apps/web/: React + Vite (later)
-- platform/: CDK pipeline (later); docs/: architecture notes
+- apps/web/: React 19 + Vite + TypeScript SPA, Amplify auth library (hosted on S3 + CloudFront)
+- platform/: CDK pipeline (next); docs/: architecture notes
 
 ## Architecture
 ![Architecture](docs/architecture.svg)
 
-Source: [docs/architecture.svg](docs/architecture.svg). Solid = deployed (Phase 1), dashed = planned (Phase 2).
+Source: [docs/architecture.svg](docs/architecture.svg). Everything shown is deployed (Phases 1 + 2).
 History of what was built: [docs/WORKLOG.md](docs/WORKLOG.md).
 
 ## Decisions
 - Build order: infra → backend → frontend
 - One AWS account for now (456423665721, us-west-2); separate beta/prod accounts later via AWS Organizations
 - AWS account comes from env var USER_MGMT_ACCOUNT (set in ~/.zshrc; validated as 12 digits in environments.ts). Pipeline will need it too.
-- Config pattern: infra/config/types.ts + environments.ts (stage, env, retainData, pointInTimeRecovery, lambda, api)
+- Config pattern: infra/config/types.ts + environments.ts (stage, env, retainData, pointInTimeRecovery, lambda, api, web.allowedOrigins)
 - DynamoDB single-table design: table `usermanagement-${stage}`, keys pk/sk, GSI1 (gsi1pk/gsi1sk), PAY_PER_REQUEST
 - No VPC (DynamoDB is reached over IAM + HTTPS)
 - Everything destroyable while learning (RemovalPolicy.DESTROY, retainData false)
@@ -54,11 +54,30 @@ History of what was built: [docs/WORKLOG.md](docs/WORKLOG.md).
   JSON log format with levels, JAVA_TOOL_OPTIONS tiered compilation (level 1)
 - SnapStart on published versions; API Gateway calls alias `live`; priming via CRaC beforeCheckpoint must be
   READ-ONLY (runs once per snapshot, possibly several times)
-- Build before deploy: `mvn package` in services/user-api, then `cdk deploy` (pipeline will automate)
+- Build before deploy (order matters): `npm run build` in apps/web → `mvn package` in services/user-api →
+  `cdk deploy` in infra. CDK synth fails if dist/index.html or the JAR is missing. Chain with `&&` (pipeline will automate)
+- Frontend:
+  - Amplify auth library only (no Amplify CLI/backend/hosting): signUp, confirmSignUp, signIn (SRP), signOut,
+    fetchAuthSession (auto-refreshes tokens). Tokens stored in localStorage (Amplify default)
+  - App.tsx owns a discriminated-union `View` (loading | signIn | signUp | confirm | signedIn); children report
+    events via callback props. api.ts = single API client: ID token in `Authorization`, ApiError(status, problem),
+    401/403 → sign out with "session expired" message
+  - Config: `config.ts` loadConfig() → dev uses .env.local (scripts/env-from-stack.sh, VITE_* vars);
+    hosted build fetches /config.json written by CDK (s3deploy Source.jsonData, deploy-time tokens). Same dist/ for every stage
+- CORS: allowed origins = config.web.allowedOrigins (beta: http://localhost:5173) + CloudFront URL (token).
+  Three sources: RestApi defaultCorsPreflightOptions (OPTIONS), Java ApiHandler.withCors (echoes allowed Origin + Vary),
+  gateway responses (Unauthorized/AccessDenied/BadRequestBody/DEFAULT_4XX/DEFAULT_5XX) with `Access-Control-Allow-Origin: *`
+- Hosting: private S3 bucket (BLOCK_ALL, enforceSSL, autoDeleteObjects) + CloudFront with Origin Access Control,
+  HTTPS redirect, PRICE_CLASS_100, SPA fallback (403/404 → /index.html). Cache: hashed assets
+  `public, max-age=31536000, immutable`; index.html + config.json `no-cache` + invalidated on deploy (two BucketDeployments, prune false)
+- Security headers (ResponseHeadersPolicy): HSTS 1y, CSP `default-src 'self'; script-src 'self'; style-src 'self';
+  connect-src 'self' https://*.amazonaws.com; frame-ancestors 'none'`, X-Frame-Options DENY, nosniff, referrer policy
 - Hardening backlog: Powertools (logging, metrics, tracing, idempotency); DynamoDB Local/Testcontainers tests;
   CodeDeploy canary on alias; disable USER_PASSWORD_AUTH in prod; SES for Cognito email; $default model or reject
   non-JSON content types; sync profile email when Cognito email changes; post-deploy stage check in pipeline;
-  custom domain + HTTPS with frontend phase
+  tokens in cookies (Amplify CookieStorage) instead of localStorage; update typescript-eslint when minimatch fix ships;
+  custom domain + ACM (optional 2.6); multi-region DynamoDB later (TableV2 replicas; Lambda/API/Cognito are regional)
+- Prod readiness (before real users): retainData true, PITR on, table deletionProtection, separate account, deploy via pipeline
 
 ## Done
 - 1.2: CDK app, stage config, DynamoDB table (deployed, tested, destroyed)
@@ -71,7 +90,13 @@ History of what was built: [docs/WORKLOG.md](docs/WORKLOG.md).
 - 1.5b: Option B: Cognito SignUp + PostConfirmation trigger writes USER#<sub>; RegisterUser + /register removed;
   IAM narrowed; 11 JUnit tests; real end-to-end flow (sign-up → code → confirm → sign-in → GET/PUT profile) (deployed, tested, destroyed)
 
+- 2.1: Vite + React + TypeScript app shell in apps/web (ESLint)
+- 2.2: CORS (preflight, Lambda origin echo, gateway responses) + frontend config from stack outputs; 13 JUnit tests
+- 2.3: Amplify auth: sign up, confirm code, sign in (SRP, password never sent), sign out, session survives reload
+- 2.4: Profile page: GET/PUT /v1/users/profile with ID token, gateway vs Java validation errors, session-expired handling
+- 2.5: S3 + CloudFront hosting (OAC, security headers, cache rules, SPA fallback) + runtime config.json.
+  Live at the stack's WebUrl output (beta stack currently deployed)
+
 ## Current step
-Phase 2 (frontend): React + Vite in apps/web. First steps: CORS on the API, Cognito sign-up/confirm/sign-in from the
-browser (SRP), profile page calling GET/PUT /v1/users/profile. Hosting (S3 + CloudFront) and optional custom domain after.
-Backend is complete for the frontend. CDK pipeline (platform/) comes after the frontend.
+Phase 2 (frontend) is complete. Next: choose between the CDK pipeline (platform/: build React + Java, deploy beta,
+approval, deploy prod), optional 2.6 custom domain, or hardening backlog items.

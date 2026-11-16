@@ -18,6 +18,12 @@ Current decisions and next step live in [CLAUDE.md](../CLAUDE.md); this file is 
 | `38fc803` | 1.4 | Java 21 Lambda (router, 3 endpoints, DynamoDB repository, tests), arm64, SnapStart + priming |
 | `9d2d111` | | Remove placeholder Lambda and its gitignore exception |
 | `1155a8b` | 1.5 | Cognito User Pool + authorizer, sign-up via Cognito + PostConfirmation trigger, `/register` removed, IAM narrowed |
+| `35d8779`, `170bf1b` | | Work log, architecture diagram, link from CLAUDE.md |
+| `31c5564` | 2.1 | Vite + React + TypeScript app shell in `apps/web` |
+| `62986b4` | 2.2 | CORS (preflight, Lambda origin echo, gateway responses) + frontend config from stack outputs |
+| `c959d1e` | 2.3 | Amplify auth: sign up, confirm code, sign in (SRP), sign out |
+| `c507fc1` | 2.4 | Profile page: GET/PUT with ID token, Problem Details errors, session-expired handling |
+| `29450fe` | 2.5 | S3 + CloudFront hosting (OAC, security headers, cache rules, SPA fallback) + runtime `config.json` |
 
 ---
 
@@ -213,6 +219,71 @@ Routes chosen: `POST /v1/users/register`, `GET/PUT /v1/users/profile`.
 
 ---
 
+## Phase 2: React frontend
+
+### 2.1: App shell
+- `npm create vite@latest web -- --template react-ts` in `apps/` (create-vite 9; chose **ESLint** over Oxlint for the
+  `react-hooks` rules); React 19.3, Vite 8.3, TypeScript 6.0, ESLint 10
+- Replaced the starter with a shell: `type Page` union, `useState`, props, `className`
+- Learned: component, JSX, state, props, single-page app, hashed file names in `dist/` (safe long caching)
+- `npm audit` reported moderate issues: all one `minimatch` DoS via `typescript-eslint` (lint only, never shipped);
+  npm's "fix" was a **downgrade** → did NOT run `npm audit fix --force`
+
+### 2.2: CORS + frontend config
+- CORS needed from **three** response sources: API Gateway preflight (`defaultCorsPreflightOptions`), the Java Lambda
+  (`ApiHandler.withCors` echoes allowed `Origin` + `Vary: Origin`), and gateway error responses (`*`, incl. new
+  `DEFAULT_4XX` / `DEFAULT_5XX`)
+- Config: `web.allowedOrigins` per stage; `ALLOWED_ORIGINS` env var on the API function only (spread
+  `...javaFunctionProps.environment` so shared vars aren't replaced)
+- `scripts/env-from-stack.sh` writes `.env.local` (ignored via `*.local`) from stack outputs; `vite-env.d.ts` types the
+  `VITE_*` vars; `config.ts` fails fast on missing values
+- Results: preflight 204 with the origin, gateway 401 with `*`, browser `fetch` read the 401 Problem Details
+
+**Problems and fixes**
+- `cannot find symbol: parseOrigins`: helpers not added yet
+- Two methods named `handleRequest` (public + private) → renamed the old one to `route()` (access modifier doesn't
+  make a different method)
+- `mvn package` failed but `cdk deploy` ran anyway (chained without `&&`) → would have deployed the old JAR
+- Console snippet used `import.meta` → `SyntaxError` (only valid inside modules); used a plain URL instead
+- Red `GET ... 401` line in the console is just Chrome logging a failed status, not a CORS error
+
+### 2.3: Amplify auth (option A chosen over hosted UI / low-level SDK)
+- `npm install aws-amplify`; `auth.ts` → `Amplify.configure` with our pool + client (no Amplify CLI/backend)
+- Components: `SignUpForm`, `ConfirmSignUpForm`, `SignInForm`, `SignedIn`; `App.tsx` view = discriminated union
+- Learned: controlled inputs, `preventDefault`, `busy` state, `useEffect` + cleanup (`active` flag, StrictMode
+  double-mount), fragments, `type` imports (`verbatimModuleSyntax`), `nextStep.signInStep` (`CONFIRM_SIGN_UP`)
+- Verified: Network tab shows `USER_SRP_AUTH` + `PASSWORD_VERIFIER`, **password not in the payload**; session survives
+  reload (tokens in localStorage); trigger created `USER#<sub>`
+- Bundle grew 220 KB → 354 KB (106 KB gzipped) with Amplify auth
+
+### 2.4: Profile page
+- `api.ts`: `fetchAuthSession()` before each call (auto-refresh), raw ID token in `Authorization`,
+  `new URL('v1/users/profile', apiUrl)` (no leading slash keeps `/beta/`), `ApiError` with Problem Details,
+  `isAuthError` = 401 or 403
+- `ProfilePage.tsx`: load once, save + read back, field errors list, session expired → sign out with message
+- Two validation layers visible in one form: empty name → API Gateway model 400; single space → Java `notBlank`
+  with per-field `errors[]`
+- Verified: DynamoDB `updatedAt` changed; logs showed the PUT followed by a GET
+
+**Problems and fixes**
+- `npm run build` in the repo root → `ENOENT package.json` (run npm in `apps/web`)
+- Several GETs in the logs: one per page load / sign-in, plus StrictMode mounting twice in dev
+
+### 2.5: S3 + CloudFront hosting
+- Private bucket (`BLOCK_ALL`, `enforceSSL`, `autoDeleteObjects`) + CloudFront with **Origin Access Control**
+- `ResponseHeadersPolicy`: HSTS, CSP, `X-Frame-Options: DENY`, nosniff, referrer policy
+- Two `BucketDeployment`s: hashed assets cached 1 year (`immutable`); `index.html` + `config.json` `no-cache` and
+  invalidated on deploy
+- **Runtime config:** CDK writes `/config.json` with deploy-time values (`Source.jsonData`), app loads it in
+  `loadConfig()` before configuring Amplify → same `dist/` for every stage (solves the build-vs-deploy chicken-and-egg)
+- CORS origins = localhost + CloudFront URL token (CDK renders exact-match checks for extra origins)
+- Verified: `no-cache` on entry files, `max-age=31536000, immutable` on JS, security headers present, http → 301,
+  direct S3 → 403, SPA fallback 200, preflight from the CloudFront origin 204, `ALLOWED_ORIGINS` resolved
+- `npm run preview` locally shows "Could not load /config.json": proof the production build reads config at runtime
+- First deploy ~5 min (new distribution); destroys are slower now (CloudFront must disable first)
+
+---
+
 ## Gotchas collected
 
 1. zsh: pasted `#` comments, `$VAR` not word-split, `=word` expansion, `$RANDOM` repeats in subshells
@@ -227,6 +298,14 @@ Routes chosen: `POST /v1/users/register`, `GET/PUT /v1/users/profile`.
 10. Removing a REST API route can leave it live in the stage → verify with `get-export`, `create-deployment`
 11. API Gateway models only validate the matching Content-Type
 12. Admin-created Cognito users don't fire PostConfirmation
+13. CORS must be added in every place that produces a response (preflight, Lambda, gateway errors)
+14. A nested `environment` in a spread replaces the shared one; spread it again inside
+15. `import.meta` doesn't work in the DevTools console
+16. npm commands must run in the folder that has the `package.json` (`apps/web`, `infra`)
+17. `npm audit fix --force` can downgrade packages; check whether the issue ships to users first
+18. Vite `VITE_*` values are baked in at build time → use runtime `config.json` for hosted builds
+19. With OAC, missing S3 objects return 403 (not 404); the SPA fallback must cover both
+20. Never cache `index.html` long; only hashed assets
 
 ---
 
@@ -274,5 +353,5 @@ aws apigateway create-deployment --rest-api-id <id> --stage-name beta
 
 ## Next
 
-Phase 2: React + Vite frontend in `apps/web` (CORS, Cognito sign-up/confirm/sign-in with SRP, profile page,
-per-stage config, then S3 + CloudFront hosting). See CLAUDE.md "Current step".
+Phase 2 is complete. Options: CDK pipeline (`platform/`), optional 2.6 custom domain, or hardening backlog.
+See CLAUDE.md "Current step".
