@@ -18,6 +18,10 @@ import com.usermanagement.api.users.DynamoDbUserRepository;
 import com.amazonaws.services.lambda.runtime.logging.LogLevel;
 import org.crac.Core;
 import org.crac.Resource;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Set;
+
 
 
 
@@ -26,24 +30,36 @@ import org.crac.Resource;
 public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent>, Resource {
 
     private final Map<String, Endpoint> routes;
+    private final Set<String> allowedOrigins;
 
-    /** Called by the Lambda runtime once per cold start (requires a public no-arg constructor). */
+
+    /** Called by the Lambda runtime once per cold start. */
     public ApiHandler() {
-        // should be: client + table name
-        this(new DynamoDbUserRepository(AwsClients.dynamoDb(), AwsClients.requireEnv("TABLE_NAME")));
+        this(new DynamoDbUserRepository(AwsClients.dynamoDb(), AwsClients.requireEnv("TABLE_NAME")),
+                parseOrigins(System.getenv("ALLOWED_ORIGINS")));
         Core.getGlobalContext().register(this);
     }
 
+    /** Tests: no CORS origins. */
     public ApiHandler(UserRepository users) {
+        this(users, Set.of());
+    }
+
+    ApiHandler(UserRepository users, Set<String> allowedOrigins) {
         List<Endpoint> endpoints = List.of(
                 new GetUserProfile(users),
                 new UpdateUserProfile(users));
         this.routes = endpoints.stream()
                 .collect(Collectors.toUnmodifiableMap(Endpoint::routeKey, endpoint -> endpoint));
+        this.allowedOrigins = allowedOrigins;
     }
-
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent event, Context context) {
+        return withCors(event, route(event, context));
+    }
+
+
+    private APIGatewayProxyResponseEvent route(APIGatewayProxyRequestEvent event, Context context) {
         String routeKey = event.getHttpMethod() + " " + event.getResource();
         String requestId = event.getRequestContext() != null ? event.getRequestContext().getRequestId() : null;
         //System.out.println(Json.write(Map.of("routeKey", routeKey, "requestId", String.valueOf(requestId))));
@@ -91,15 +107,6 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         // nothing to refresh: SDK reconnects, credentials provider refreshes itself
     }
 
-/*
-    private static String requireEnv(String name) {
-        String value = System.getenv(name);
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException("Missing environment variable " + name);
-        }
-        return value;
-    } */
-
     /** LambdaLogger keeps multi-line messages (stack traces) as ONE CloudWatch event. */
     private static void log(Context context, String message) {
         if (context != null) {
@@ -115,6 +122,43 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         } else {
             System.out.println(message);
         }
+    }
+
+    /** Echo the Origin back only if it is allowed for this stage. */
+    private APIGatewayProxyResponseEvent withCors(APIGatewayProxyRequestEvent event, APIGatewayProxyResponseEvent response) {
+        String origin = header(event, "Origin");
+        if (origin != null && allowedOrigins.contains(origin)) {
+            var headers = new HashMap<String, String>();
+            if (response.getHeaders() != null) {
+                headers.putAll(response.getHeaders());
+            }
+            headers.put("Access-Control-Allow-Origin", origin);
+            headers.put("Vary", "Origin");
+            response.setHeaders(headers);
+        }
+        return response;
+    }
+
+    /** HTTP header names are case-insensitive; API Gateway keeps the client's casing. */
+    private static String header(APIGatewayProxyRequestEvent event, String name) {
+        if (event.getHeaders() == null) {
+            return null;
+        }
+        return event.getHeaders().entrySet().stream()
+                .filter(entry -> entry.getKey().equalsIgnoreCase(name))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static Set<String> parseOrigins(String value) {
+        if (value == null || value.isBlank()) {
+            return Set.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
 

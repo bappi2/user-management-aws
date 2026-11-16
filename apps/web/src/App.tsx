@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import './App.css';
+import { config } from './config';
+
 
 type Page = 'signIn' | 'signUp' | 'profile';
 
@@ -17,6 +19,10 @@ function App() {
       </nav>
 
       <PagePlaceholder name={page} />
+      <footer className="placeholder">
+        stage: {config.stage} · API: {config.apiUrl}
+      </footer>
+
     </main>
   );
 }

@@ -15,5 +15,8 @@ export interface StageConfig {
     readonly throttleRateLimit: number;   // steady requests/sec
     readonly throttleBurstLimit: number;  // short spikes
   };
+    readonly web: {
+    readonly allowedOrigins: string[];   // browser origins allowed to call the API (CORS)
+  };
 
 }

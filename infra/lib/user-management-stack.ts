@@ -114,6 +114,10 @@ export class UserManagementStack extends Stack {
       handler: 'com.usermanagement.api.ApiHandler::handleRequest',
       timeout: Duration.seconds(config.lambda.timeoutSeconds),
       logGroup,
+      environment: {
+        ...javaFunctionProps.environment,
+        ALLOWED_ORIGINS: config.web.allowedOrigins.join(','),
+      },
     });
 
 
@@ -162,6 +166,15 @@ export class UserManagementStack extends Stack {
         throttlingRateLimit: config.api.throttleRateLimit,
         throttlingBurstLimit: config.api.throttleBurstLimit,
       },
+      ...(config.web.allowedOrigins.length > 0 && {
+        defaultCorsPreflightOptions: {
+          allowOrigins: config.web.allowedOrigins,
+          allowMethods: ['GET', 'PUT', 'OPTIONS'],
+          allowHeaders: ['Content-Type', 'Authorization'],
+          maxAge: Duration.hours(1),
+        },
+      }),
+
     });
         
     // Evently: .RequireAuthorization()
@@ -198,7 +211,9 @@ export class UserManagementStack extends Stack {
     api.addGatewayResponse('BadRequestBody', {
       type: apigw.ResponseType.BAD_REQUEST_BODY,
       statusCode: '400',
-      responseHeaders: { 'Content-Type': "'application/problem+json'" },
+      responseHeaders: { 'Content-Type': "'application/problem+json'", 
+        'Access-Control-Allow-Origin': "'*'",
+      },
       templates: {
         'application/json':
           '{"type":"about:blank","title":"Request.ValidationFailed","status":400,"detail":$context.error.messageString}',
@@ -207,7 +222,9 @@ export class UserManagementStack extends Stack {
         api.addGatewayResponse('Unauthorized', {
       type: apigw.ResponseType.UNAUTHORIZED,
       statusCode: '401',
-      responseHeaders: { 'Content-Type': "'application/problem+json'" },
+      responseHeaders: { 'Content-Type': "'application/problem+json'", 
+        'Access-Control-Allow-Origin': "'*'",
+      },
       templates: {
         'application/json':
           '{"type":"about:blank","title":"Auth.Unauthorized","status":401,"detail":$context.error.messageString}',
@@ -217,13 +234,23 @@ export class UserManagementStack extends Stack {
     api.addGatewayResponse('AccessDenied', {
       type: apigw.ResponseType.ACCESS_DENIED,
       statusCode: '403',
-      responseHeaders: { 'Content-Type': "'application/problem+json'" },
+      responseHeaders: { 'Content-Type': "'application/problem+json'", 
+        'Access-Control-Allow-Origin': "'*'",
+      },
       templates: {
         'application/json':
           '{"type":"about:blank","title":"Auth.Forbidden","status":403,"detail":$context.error.messageString}',
       },
     });
-
+    // Every other API Gateway error (429 throttling, unknown route, 5xx): readable by the browser
+    api.addGatewayResponse('Default4xx', {
+      type: apigw.ResponseType.DEFAULT_4XX,
+      responseHeaders: { 'Access-Control-Allow-Origin': "'*'" },
+    });
+    api.addGatewayResponse('Default5xx', {
+      type: apigw.ResponseType.DEFAULT_5XX,
+      responseHeaders: { 'Access-Control-Allow-Origin': "'*'" },
+    });
 
 
     //const integration = new apigw.LambdaIntegration(apiFunction);

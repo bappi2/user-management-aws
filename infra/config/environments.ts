@@ -14,7 +14,8 @@ export const STAGES: Record<Stage, StageConfig> = {
     pointInTimeRecovery: false,
     lambda: { memorySize: 1024, timeoutSeconds: 10 },
     api: { throttleRateLimit: 10, throttleBurstLimit: 20 },
-
+    // beta:
+    web: { allowedOrigins: ['http://localhost:5173'] },
   },
   prod: {
     stage: 'prod',
@@ -23,5 +24,7 @@ export const STAGES: Record<Stage, StageConfig> = {
     pointInTimeRecovery: false,
     lambda: { memorySize: 1024, timeoutSeconds: 10 },
     api: { throttleRateLimit: 10, throttleBurstLimit: 20 },
+    // prod:
+    web: { allowedOrigins: [] },   // CloudFront URL added in 2.5
   },
 };

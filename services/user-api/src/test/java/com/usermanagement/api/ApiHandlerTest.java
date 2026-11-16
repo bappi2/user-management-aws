@@ -98,4 +98,37 @@ class ApiHandlerTest {
     private static JsonNode body(APIGatewayProxyResponseEvent response) throws Exception {
         return Json.MAPPER.readTree(response.getBody());
     }
+        @Test
+    void allowedOriginGetsCorsHeader() {
+        var users = new InMemoryUserRepository();
+        users.insert(new User(USER_ID, "jane@example.com", "Jane", "Doe"));
+        var corsHandler = new ApiHandler(users, java.util.Set.of("http://localhost:5173"));
+
+        var event = profileRequestWithOrigin("http://localhost:5173");
+        var response = corsHandler.handleRequest(event, null);
+
+        assertEquals("http://localhost:5173", response.getHeaders().get("Access-Control-Allow-Origin"));
+        assertEquals("Origin", response.getHeaders().get("Vary"));
+    }
+
+    @Test
+    void unknownOriginGetsNoCorsHeader() {
+        var corsHandler = new ApiHandler(new InMemoryUserRepository(), java.util.Set.of("http://localhost:5173"));
+
+        var response = corsHandler.handleRequest(profileRequestWithOrigin("https://evil.example"), null);
+
+        assertEquals(null, response.getHeaders().get("Access-Control-Allow-Origin"));
+    }
+
+    private static APIGatewayProxyRequestEvent profileRequestWithOrigin(String origin) {
+        var context = new APIGatewayProxyRequestEvent.ProxyRequestContext();
+        context.setRequestId("test-request");
+        context.setAuthorizer(Map.<String, Object>of("claims", Map.of("sub", USER_ID)));
+        return new APIGatewayProxyRequestEvent()
+                .withHttpMethod("GET")
+                .withResource("/v1/users/profile")
+                .withHeaders(Map.of("origin", origin))   // lower-case on purpose
+                .withRequestContext(context);
+    }
+
 }
