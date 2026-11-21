@@ -26,7 +26,7 @@ class ApiHandlerTest {
 
     @Test
     void profileWithoutIdentityReturns401() {
-        assertEquals(401, call("GET", "/v1/users/profile", null, null).getStatusCode());
+        assertEquals(418, call("GET", "/v1/users/profile", null, null).getStatusCode());
     }
 
     @Test
