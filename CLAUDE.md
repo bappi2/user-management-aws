@@ -16,6 +16,10 @@ Claude does not modify code: Claude explains, I make the changes myself.
 Source: [docs/architecture.svg](docs/architecture.svg). Everything shown is deployed (Phases 1–3).
 History of what was built: [docs/WORKLOG.md](docs/WORKLOG.md).
 
+Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → UpdatePipeline (SelfMutate) → Assets (7 actions)
+→ beta (Prepare, Deploy, SmokeTest) → prod (PromoteToProd approval, Prepare, Deploy, SmokeTest).
+![CodePipeline console](docs/pipeline-console.png)
+
 ## Decisions
 - Build order: infra → backend → frontend
 - One AWS account for now (456423665721, us-west-2): pipeline, beta and prod all live there (decided in 3.0:
