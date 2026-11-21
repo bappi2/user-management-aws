@@ -105,7 +105,7 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   connect-src 'self' https://*.amazonaws.com; frame-ancestors 'none'`, X-Frame-Options DENY, nosniff, referrer policy
 - Hardening backlog: HIGH: stop using the root user (MFA on root, IAM Identity Center admin for console/CLI/approvals;
   prod was approved as root in 3.5); pipeline notifications (SNS/chatbot on approval waiting + failure);
-  CodeBuild cache for npm/Maven; smoke test: route check via `get-export` + real sign-in (test user);
+  CodeBuild cache for npm/Maven; pipeline trigger file-path filter (skip docs-only pushes: `docs/**`, `*.md`); smoke test: route check via `get-export` + real sign-in (test user);
   Powertools (logging, metrics, tracing, idempotency); DynamoDB Local/Testcontainers tests;
   CodeDeploy canary on alias; disable USER_PASSWORD_AUTH in prod; SES for Cognito email; $default model or reject
   non-JSON content types; sync profile email when Cognito email changes;
@@ -138,7 +138,18 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
 - 3.3: Pipeline stack (Source, Synth with React + Java + CDK, self-mutation, beta stage); deployed once from laptop
 - 3.4: Beta SmokeTest via envFromCfnOutputs (added by git push → self-mutation)
 - 3.5: Manual approval + prod stage + prod SmokeTest. Prod live (UserManagement-prod, its own pool/table/CloudFront URL)
+- 3.7: Prod sign-up + profile save verified; failing JUnit test stopped the pipeline at Synth (beta/prod untouched,
+  checked via LastUpdatedTime); `git revert` → green through beta and prod
+
+## Phase 4 plan (reusable starter for a future app)
+Public landing page, social login, user tiers, sidebar for signed-in pages.
+- 4.1: React Router; public `/`, `/login`, `/signup`, `/privacy`; protected `/app/*` layout with sidebar (frontend only)
+- 4.2: Google sign-in via Cognito federation (Cognito domain, IdP + attribute mapping, OAuth callbacks,
+  Amplify signInWithRedirect; CSP connect-src needs `https://*.amazoncognito.com`; account linking via PreSignUp later)
+- 4.3: Tiers: `tier` on USER#<sub>/PROFILE (set by PostConfirmation), GET /v1/users/me, Java tier checks → 403
+  (DynamoDB, not Cognito groups: a payment webhook can change it instantly)
+- 4.4: Tier-gated pages (locked sidebar items, upgrade prompt), optional usage quotas (conditional UpdateItem)
+- Later: Apple sign-in (name only sent on first sign-in; pool requires given/family name), custom domain, Stripe
 
 ## Current step
-3.7: try the pipeline: sign up on prod; break a JUnit test on purpose → pipeline stops at Synth, beta/prod untouched;
-revert. Then choose: hardening (root user first), optional 2.6 custom domain, or multi-region DynamoDB.
+4.1 on branch `feature/4.1-router` (pipeline only watches `main`; merge to `main` = deploy).

@@ -350,6 +350,23 @@ Goal: `git push` builds React + Java, deploys beta, smoke-tests it, waits for ap
 - **Finding:** prod preflight from `http://localhost:5173` returns 204 too, but `Access-Control-Allow-Origin` is the
   prod CloudFront URL → the browser blocks it. CORS is enforced by the browser comparing the header
 
+### 3.7: Trying the pipeline
+- Prod sign-up (`+umtest3` Gmail alias, prod has its own pool): PostConfirmation wrote `USER#<sub>/PROFILE` to
+  `usermanagement-prod` (`createdAt == updatedAt`). Profile save in the prod site → `lastName` changed, `updatedAt` later
+  than `createdAt` (PUT → authorizer → Lambda → conditional UpdateItem)
+- Before breaking: recorded `LastUpdatedTime` of both stacks (beta 2026-11-17, prod 2026-11-18)
+- Broke `ApiHandlerTest.profileWithoutIdentityReturns401` (401 → 418). Docs commit + break commit, **one push** (the
+  pipeline builds HEAD only, so the docs commit never ran alone)
+- Synth failed in `mvn -B package`: `expected: <418> but was: <401>`, `Tests run: 13, Failures: 1`, `BUILD FAILURE`,
+  exit status 1 → `cdk synth` never ran. UpdatePipeline/Assets/beta/prod kept the previous execution ID; both stacks'
+  `LastUpdatedTime` unchanged
+- `git revert HEAD` + push → green through beta (SmokeTest passed) → approved PromoteToProd (as root again) → prod
+  Deploy + SmokeTest green
+- **Learned:** stages show the last execution that *reached* them; the approver's ARN is recorded on the action
+- **Decision:** from 4.1 on, work on `feature/*` branches; merging to `main` = deploy. Considered disabling the
+  Source → Build transition to batch pushes: works, but saves only cents per run
+- **Backlog:** V2 trigger file-path filter so docs-only pushes (`docs/**`, `*.md`) don't run the pipeline
+
 ---
 
 ## Gotchas collected
@@ -439,5 +456,6 @@ aws apigateway create-deployment --rest-api-id <id> --stage-name beta
 
 ## Next
 
-Phase 3.7: try the pipeline (prod sign-up, a deliberately failing test stops at Synth). Then: hardening (root user
-first), optional 2.6 custom domain, or multi-region DynamoDB. See CLAUDE.md "Current step".
+Phase 4: turn the app into a reusable starter: public landing page, social login (Google), user tiers, sidebar for
+signed-in pages. 4.1 first: React Router + landing + `/login` `/signup` `/privacy` + protected `/app/*` layout with
+sidebar (frontend only). See CLAUDE.md "Current step".
