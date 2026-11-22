@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { configureAuth } from './auth'
 import { loadConfig } from './config'
+import { BrowserRouter } from 'react-router'
 
 const root = createRoot(document.getElementById('root')!)
 
@@ -13,7 +14,9 @@ loadConfig()
     configureAuth()
     root.render(
       <StrictMode>
-        <App />
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
       </StrictMode>,
     )
   })

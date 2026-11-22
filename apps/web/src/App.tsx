@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getCurrentUser } from 'aws-amplify/auth';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router';
 import './App.css';
 import { config } from './config';
 import { ConfirmSignUpForm } from './components/ConfirmSignUpForm';
@@ -7,67 +8,98 @@ import { SignedIn } from './components/SignedIn';
 import { SignInForm } from './components/SignInForm';
 import { SignUpForm } from './components/SignUpForm';
 
-type View =
-  | { name: 'loading' }
-  | { name: 'signIn'; message?: string }
-  | { name: 'signUp' }
-  | { name: 'confirm'; email: string }
-  | { name: 'signedIn' };
-
 function App() {
-  const [view, setView] = useState<View>({ name: 'loading' });
+  // null = still checking; true/false = answer from Amplify (tokens survive a reload)
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const navigate = useNavigate();
 
-  // On page load: are we already signed in? (tokens survive a page reload)
   useEffect(() => {
     getCurrentUser()
-      .then(() => setView({ name: 'signedIn' }))
-      .catch(() => setView({ name: 'signIn' }));
+      .then(() => setSignedIn(true))
+      .catch(() => setSignedIn(false));
   }, []);
+
+  if (signedIn === null) {
+    return <main className="app"><p className="hint">Loading…</p></main>;
+  }
+
+  function handleSignedIn() {
+    setSignedIn(true);
+    navigate('/app');
+  }
+
+  function handleSignedOut(message?: string) {
+    setSignedIn(false);
+    navigate('/login', { replace: true, state: { message } });
+  }
 
   return (
     <main className="app">
       <h1>User Management</h1>
 
-      {view.name === 'loading' && <p className="hint">Loading…</p>}
-
-      {view.name === 'signIn' && (
-        <>
-          {view.message && <p className="info">{view.message}</p>}
-          <SignInForm
-            onSignedIn={() => setView({ name: 'signedIn' })}
-            onNeedsConfirmation={(email) => setView({ name: 'confirm', email })}
-          />
-          <p>
-            No account?{' '}
-            <button className="link" onClick={() => setView({ name: 'signUp' })}>Sign up</button>
-          </p>
-        </>
-      )}
-
-      {view.name === 'signUp' && (
-        <>
-          <SignUpForm onSignedUp={(email) => setView({ name: 'confirm', email })} />
-          <p>
-            Already have an account?{' '}
-            <button className="link" onClick={() => setView({ name: 'signIn' })}>Sign in</button>
-          </p>
-        </>
-      )}
-
-      {view.name === 'confirm' && (
-        <ConfirmSignUpForm
-          email={view.email}
-          onConfirmed={() => setView({ name: 'signIn', message: 'Email confirmed. You can sign in now.' })}
+      <Routes>
+        <Route path="/" element={<Navigate to={signedIn ? '/app' : '/login'} replace />} />
+        <Route
+          path="/login"
+          element={signedIn ? <Navigate to="/app" replace /> : <LoginRoute onSignedIn={handleSignedIn} />}
         />
-      )}
-
-      {view.name === 'signedIn' && (
-        <SignedIn onSignedOut={(message) => setView({ name: 'signIn', message })} />
-      )}
-
+        <Route path="/signup" element={<SignUpRoute />} />
+        <Route path="/confirm" element={<ConfirmRoute />} />
+        <Route
+          path="/app"
+          element={signedIn ? <SignedIn onSignedOut={handleSignedOut} /> : <Navigate to="/login" replace />}
+        />
+        <Route path="*" element={<p>Page not found. <Link to="/">Go home</Link></p>} />
+      </Routes>
 
       <footer className="hint">stage: {config.stage} · API: {config.apiUrl}</footer>
     </main>
+  );
+}
+
+function LoginRoute({ onSignedIn }: { onSignedIn: () => void }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const message = (location.state as { message?: string } | null)?.message;
+
+  return (
+    <>
+      {message && <p className="info">{message}</p>}
+      <SignInForm
+        onSignedIn={onSignedIn}
+        onNeedsConfirmation={(email) => navigate(`/confirm?email=${encodeURIComponent(email)}`)}
+      />
+      <p>No account? <Link to="/signup">Sign up</Link></p>
+    </>
+  );
+}
+
+function SignUpRoute() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <SignUpForm onSignedUp={(email) => navigate(`/confirm?email=${encodeURIComponent(email)}`)} />
+      <p>Already have an account? <Link to="/login">Sign in</Link></p>
+    </>
+  );
+}
+
+function ConfirmRoute() {
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const email = params.get('email');
+
+  if (!email) {
+    return <Navigate to="/signup" replace />;   // someone opened /confirm directly
+  }
+
+  return (
+    <ConfirmSignUpForm
+      email={email}
+      onConfirmed={() =>
+        navigate('/login', { replace: true, state: { message: 'Email confirmed. You can sign in now.' } })
+      }
+    />
   );
 }
 
