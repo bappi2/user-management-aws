@@ -13,6 +13,8 @@ export function LoginPage() {
         onSignedIn={() => { /* Hub 'signedIn' → AuthProvider → GuestOnly redirects */ }}
         onNeedsConfirmation={(email) => navigate(`/confirm?email=${encodeURIComponent(email)}`)}
       />
+      <p><Link to="/forgot-password">Forgot password?</Link></p>
+
       <p>No account? <Link to="/signup">Sign up</Link></p>
     </>
   );
