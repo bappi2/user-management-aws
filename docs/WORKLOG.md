@@ -369,6 +369,49 @@ Goal: `git push` builds React + Java, deploys beta, smoke-tests it, waits for ap
 
 ---
 
+## Phase 4: Reusable starter (landing, social login, tiers, sidebar)
+
+Goal: a foundation for a future app (product idea not decided yet). Work happens on `feature/*` branches.
+
+### 4.1a: Router with the same behaviour
+- `npm install react-router` (v8.5.2; checked the tarball: `react-router-dom` removed in v8, declarative APIs still
+  there). `BrowserRouter` in main.tsx; the `View` union became routes `/login`, `/signup`, `/confirm?email=`, `/app`
+- Forms unchanged (callback props); only the wiring moved from `setView` to `navigate()`
+- `encodeURIComponent(email)`: in a query string `+` means space, so `bappi2+alias@…` would break confirm
+- **Mistake:** `BrowserRouter` landed in the `.catch` branch → `.then` rendered App without a router → `useNavigate()`
+  threw → blank page. TypeScript hinted (`'error' is declared but never read`)
+
+### 4.1b: AuthContext + guards
+- Checked Amplify 6.22.2 source: signInWithSRP / confirmSignIn / completeOAuthFlow dispatch Hub `signedIn`, signOut
+  dispatches `signedOut` → AuthProvider derives `status` from Hub, no manual `setSignedIn`
+- Split `authContext.ts` (context + `useAuth`) and `AuthProvider.tsx` (component only): react-refresh lint rule
+- RequireAuth (signed out → /login with `state.from`) + GuestOnly (signed in → `from` or /app) as layout routes
+- Not handling `tokenRefresh_failure` (also fires on network blips; real expiry ends in API 401 → signOut)
+- **Mistake:** guards used in App.tsx without importing them → ReferenceError → blank page. `npm run dev` doesn't
+  type-check; `npx tsc -b` showed `Cannot find name 'GuestOnly'`
+- "localhost refused to connect" = dev server not running (stopped to run git in the same terminal) → two terminals
+
+### 4.1c: App layout with sidebar
+- AuthLayout (old centered card) and AppLayout (CSS grid sidebar + `<Outlet />`, top bar under 640px)
+- `NavLink` adds `class="active"`; `end` on Home so `/app` isn't active on `/app/profile`
+- Session-expired message moved into the context: `signOut(message)` stores it before Amplify signOut, RequireAuth
+  passes it to /login (fixes the race between Hub redirect and the page navigating itself)
+- `useCallback` for `signOut` and the ProfilePage handler: effect deps compare functions by identity
+- `SignedIn.tsx` split into HomePage (claims), AppLayout (sign out), ProfileRoute (session expired)
+- **Mistakes:** `ProfileRoute` defined inside `App` (component inside component = remount every render);
+  HomePage created under `src/auth/pages/` (wrong folder → Vite "Failed to resolve import")
+
+### 4.1d: Public side
+- PublicLayout (header: Log in / Sign up, or Open app; nothing while `loading` to avoid a flash), LandingPage (hero +
+  feature cards from an array), PrivacyPage (template, true for the current stack; needed for Google's consent screen),
+  NotFoundPage (`*` in PublicLayout, also catches `/app/nope`)
+- Auth route components moved to `pages/`; `components/ProfilePage` renamed `ProfileForm`; `pages/app/ProfilePage`
+  is the wrapper. App.tsx = the whole site map. `src/brand.ts` APP_NAME
+- CSS: `repeat(auto-fit, minmax(220px, 1fr))` cards, `clamp()` headline, sticky footer via flex column
+- **Mistake:** renamed the file `ProfileForm.tsx` but not the exported function → `no exported member 'ProfileForm'`
+
+---
+
 ## Gotchas collected
 
 1. zsh: pasted `#` comments, `$VAR` not word-split, `=word` expansion, `$RANDOM` repeats in subshells
@@ -399,6 +442,9 @@ Goal: `git push` builds React + Java, deploys beta, smoke-tests it, waits for ap
 25. `envFromCfnOutputs` needs the `CfnOutput` object → keep it in a public field on the stack
 26. A CORS preflight can return 204 and still be rejected; check `Access-Control-Allow-Origin`
 27. `get-pipeline-state` is a subcommand: `aws codepipeline get-pipeline-state --name …`
+28. Blank page in dev = runtime error before render; check the browser Console, then `npx tsc -b` (Vite doesn't type-check)
+29. Relative paths in git/mv/cat depend on the current folder: `git add CLAUDE.md` from `services/user-api` stages nothing
+30. Renaming a file doesn't rename its export; imports ask for the export name
 
 ---
 
@@ -456,6 +502,5 @@ aws apigateway create-deployment --rest-api-id <id> --stage-name beta
 
 ## Next
 
-Phase 4: turn the app into a reusable starter: public landing page, social login (Google), user tiers, sidebar for
-signed-in pages. 4.1 first: React Router + landing + `/login` `/signup` `/privacy` + protected `/app/*` layout with
-sidebar (frontend only). See CLAUDE.md "Current step".
+4.1e: merge to `main`, check deep links on beta (CloudFront SPA fallback), approve prod. Then 4.2: Google sign-in via
+Cognito federation. See CLAUDE.md "Current step".

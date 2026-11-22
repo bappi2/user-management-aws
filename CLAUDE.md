@@ -90,9 +90,19 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
 - Frontend:
   - Amplify auth library only (no Amplify CLI/backend/hosting): signUp, confirmSignUp, signIn (SRP), signOut,
     fetchAuthSession (auto-refreshes tokens). Tokens stored in localStorage (Amplify default)
-  - App.tsx owns a discriminated-union `View` (loading | signIn | signUp | confirm | signedIn); children report
-    events via callback props. api.ts = single API client: ID token in `Authorization`, ApiError(status, problem),
-    401/403 → sign out with "session expired" message
+  - Routing (4.1): React Router v8, declarative mode (`BrowserRouter` + `Routes`; v8 has no react-router-dom, import
+    from `react-router`). App.tsx = route table only. Three layout routes: PublicLayout (`/`, `/privacy`, 404),
+    AuthLayout (`/login`, `/signup`, `/confirm?email=` inside GuestOnly), AppLayout sidebar (`/app`, `/app/profile`
+    inside RequireAuth)
+  - Auth state: AuthProvider (src/auth) sets `status` (loading | signedIn | signedOut) from Amplify Hub `signedIn` /
+    `signedOut` events + one getCurrentUser() at startup; nobody sets it by hand. `useAuth()` exposes
+    `{ status, signOutMessage, signOut(message?) }`; RequireAuth passes `from` (redirect-back) + the message to /login
+  - Convention: `components/` = reusable forms reporting events via callback props (SignInForm, ProfileForm…);
+    `pages/` = one file per URL wiring them to router/context. App name in `src/brand.ts` (APP_NAME) + index.html title
+  - api.ts = single API client: ID token in `Authorization`, ApiError(status, problem), 401/403 → ProfilePage calls
+    `signOut('Your session expired…')`
+  - GOTCHA: `npm run dev` does NOT type-check: a missing import is a blank page (ReferenceError in the Console).
+    Run `npx tsc -b` when the page is blank. Router hooks throw outside `<BrowserRouter>`
   - Config: `config.ts` loadConfig() → dev uses .env.local (scripts/env-from-stack.sh, VITE_* vars);
     hosted build fetches /config.json written by CDK (s3deploy Source.jsonData, deploy-time tokens). Same dist/ for every stage
 - CORS: allowed origins = config.web.allowedOrigins (beta: http://localhost:5173) + CloudFront URL (token).
@@ -105,7 +115,7 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   connect-src 'self' https://*.amazonaws.com; frame-ancestors 'none'`, X-Frame-Options DENY, nosniff, referrer policy
 - Hardening backlog: HIGH: stop using the root user (MFA on root, IAM Identity Center admin for console/CLI/approvals;
   prod was approved as root in 3.5); pipeline notifications (SNS/chatbot on approval waiting + failure);
-  CodeBuild cache for npm/Maven; pipeline trigger file-path filter (skip docs-only pushes: `docs/**`, `*.md`); smoke test: route check via `get-export` + real sign-in (test user);
+  CodeBuild cache for npm/Maven; self-service account deletion (privacy page promises deletion on request); pipeline trigger file-path filter (skip docs-only pushes: `docs/**`, `*.md`); smoke test: route check via `get-export` + real sign-in (test user);
   Powertools (logging, metrics, tracing, idempotency); DynamoDB Local/Testcontainers tests;
   CodeDeploy canary on alias; disable USER_PASSWORD_AUTH in prod; SES for Cognito email; $default model or reject
   non-JSON content types; sync profile email when Cognito email changes;
@@ -141,6 +151,9 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
 - 3.7: Prod sign-up + profile save verified; failing JUnit test stopped the pipeline at Synth (beta/prod untouched,
   checked via LastUpdatedTime); `git revert` → green through beta and prod
 
+- 4.1: React Router (a–d on `feature/4.1-router`): routes, AuthContext from Hub events + guards, sidebar app layout,
+  public landing / privacy / 404 pages. Tested locally
+
 ## Phase 4 plan (reusable starter for a future app)
 Public landing page, social login, user tiers, sidebar for signed-in pages.
 - 4.1: React Router; public `/`, `/login`, `/signup`, `/privacy`; protected `/app/*` layout with sidebar (frontend only)
@@ -152,4 +165,6 @@ Public landing page, social login, user tiers, sidebar for signed-in pages.
 - Later: Apple sign-in (name only sent on first sign-in; pool requires given/family name), custom domain, Stripe
 
 ## Current step
-4.1 on branch `feature/4.1-router` (pipeline only watches `main`; merge to `main` = deploy).
+4.1e: merge `feature/4.1-router` → `main` (fast-forward), push; on beta check deep links via the CloudFront
+SPA fallback (reload `/app/profile`, open `/privacy` directly); approve prod. Then 4.2 (Google sign-in) on a new branch.
+Workflow: `feature/*` branches; merge to `main` = deploy; put doc updates on the branch (one pipeline run).
