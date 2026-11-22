@@ -1,5 +1,6 @@
-import { NavLink, Outlet } from 'react-router';
+import { Link, NavLink, Outlet } from 'react-router';
 import { useAuth } from '../auth/authContext';
+import { APP_NAME } from '../brand';
 import { config } from '../config';
 
 export function AppLayout() {
@@ -8,7 +9,7 @@ export function AppLayout() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">User Management</div>
+        <Link to="/" className="brand">{APP_NAME}</Link>
 
         <nav className="sidenav">
           <NavLink to="/app" end>Home</NavLink>

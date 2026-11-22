@@ -25,7 +25,7 @@ type Props = {
   onSessionExpired: () => void;
 };
 
-export function ProfilePage({ onSessionExpired }: Props) {
+export function ProfileForm({ onSessionExpired }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
