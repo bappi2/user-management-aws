@@ -16,6 +16,7 @@ export const STAGES: Record<Stage, StageConfig> = {
     api: { throttleRateLimit: 10, throttleBurstLimit: 20 },
     // beta:
     web: { allowedOrigins: ['http://localhost:5173'] },
+    auth: { domainPrefix: 'usermanagement-beta' },
   },
   prod: {
     stage: 'prod',
@@ -26,5 +27,7 @@ export const STAGES: Record<Stage, StageConfig> = {
     api: { throttleRateLimit: 10, throttleBurstLimit: 20 },
     // prod:
     web: { allowedOrigins: [] },   // CloudFront URL added in 2.5
+    auth: { domainPrefix: 'usermanagement-prod' },
   },
+
 };

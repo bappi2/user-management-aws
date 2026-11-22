@@ -93,6 +93,17 @@ export class UserManagementStack extends Stack {
 
     new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new CfnOutput(this, 'UserPoolClientId', { value: webClient.userPoolClientId });
+    // ---------- Cognito domain (4.2c): OAuth endpoints for social sign-in ----------
+    // https://<prefix>.auth.<region>.amazoncognito.com
+    //   /oauth2/authorize   app sends the browser here (with identity_provider=Google)
+    //   /oauth2/idpresponse Google sends the browser back here (Google's "redirect URI")
+    //   /oauth2/token       Amplify exchanges the code for tokens
+    const authDomain = userPool.addDomain('AuthDomain', {
+      cognitoDomain: { domainPrefix: config.auth.domainPrefix },
+      managedLoginVersion: cognito.ManagedLoginVersion.CLASSIC_HOSTED_UI,
+    });
+    new CfnOutput(this, 'AuthDomainUrl', { value: authDomain.baseUrl() });
+
     
     // ---------- Web hosting: private S3 bucket + CloudFront (Origin Access Control) ----------
     const webBucket = new s3.Bucket(this, 'WebBucket', {

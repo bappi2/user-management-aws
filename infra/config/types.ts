@@ -18,5 +18,8 @@ export interface StageConfig {
     readonly web: {
     readonly allowedOrigins: string[];   // browser origins allowed to call the API (CORS)
   };
+  readonly auth: {
+    readonly domainPrefix: string;   // https://<prefix>.auth.<region>.amazoncognito.com (globally unique per region)
+  };
 
 }
