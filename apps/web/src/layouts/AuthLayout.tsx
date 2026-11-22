@@ -2,13 +2,15 @@ import { Link, Outlet } from 'react-router';
 import { APP_NAME } from '../brand';
 import { config } from '../config';
 
-/** Centered card for login / sign-up / confirm */
+/** Grey page with a centred card for login / sign-up / confirm / password reset */
 export function AuthLayout() {
   return (
-    <main className="app">
-      <h1><Link to="/">{APP_NAME}</Link></h1>
-      <Outlet />
+    <div className="auth-page">
+      <Link to="/" className="auth-brand">{APP_NAME}</Link>
+      <main className="auth-card">
+        <Outlet />
+      </main>
       <footer className="hint">stage: {config.stage} · API: {config.apiUrl}</footer>
-    </main>
+    </div>
   );
 }
