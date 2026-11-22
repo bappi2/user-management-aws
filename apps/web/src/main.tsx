@@ -5,6 +5,7 @@ import App from './App.tsx'
 import { configureAuth } from './auth'
 import { loadConfig } from './config'
 import { BrowserRouter } from 'react-router'
+import { AuthProvider } from './auth/AuthProvider'
 
 const root = createRoot(document.getElementById('root')!)
 
@@ -14,8 +15,10 @@ loadConfig()
     configureAuth()
     root.render(
       <StrictMode>
-        <BrowserRouter>
-          <App />
+         <BrowserRouter>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
         </BrowserRouter>
       </StrictMode>,
     )
