@@ -410,6 +410,29 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
 - CSS: `repeat(auto-fit, minmax(220px, 1fr))` cards, `clamp()` headline, sticky footer via flex column
 - **Mistake:** renamed the file `ProfileForm.tsx` but not the exported function → `no exported member 'ProfileForm'`
 
+### 4.1e: Merge + deploy
+- Fast-forward `main` (7d5e873..0244027), one pipeline run. Beta and prod: `/`, `/privacy`, `/app/profile` all 200
+  (CloudFront SPA fallback serves index.html, the router picks the page). Prod approved, SmokeTest green
+
+### 4.2a: Forgot password
+- Branch `feature/4.2-auth-card`. `resetPassword({ username })` → nextStep `CONFIRM_RESET_PASSWORD_WITH_CODE` → email
+  code; `confirmResetPassword({ username, confirmationCode, newPassword })`; "Resend code" calls resetPassword again
+- ForgotPasswordForm / ResetPasswordForm in `components/`, pages navigate `/forgot-password` → `/reset-password?email=`
+  → `/login` with state message "Password changed…"
+- preventUserExistenceErrors: unknown emails also "succeed" → UI says "If an account exists…"
+- Cognito fires PostConfirmation with `PostConfirmation_ConfirmForgotPassword`; the Java trigger ignores it (tested)
+- `/reset-password` without `?email=` → `<Navigate to="/forgot-password" replace />` (the form needs the username;
+  `replace` so Back doesn't bounce into the redirect again). Same pattern as ConfirmPage → /signup
+
+### 4.2b: Auth card
+- AuthLayout: grey page + centred white card (max 400px). Tabs and Google button live in LoginPage/SignUpPage, not
+  the layout, because confirm/forgot/reset share the layout but shouldn't show them
+- AuthTabs = two `NavLink`s with `replace`: the tab is the URL (reload and deep links keep it, Back leaves in one step)
+- SocialButtons: Google button (inline SVG logo, CSP-safe, `type="button"`, disabled "Coming soon") + "or" divider
+  drawn with `::before`/`::after` flex lines. `<h2>` removed from SignInForm/SignUpForm (tabs say it)
+- CSS scoped to `.auth-card .form button[type="submit"]` so ProfileForm and "Resend code" aren't affected;
+  `font: inherit` before `font-weight` (shorthand resets it)
+
 ---
 
 ## Gotchas collected
@@ -502,5 +525,5 @@ aws apigateway create-deployment --rest-api-id <id> --stage-name beta
 
 ## Next
 
-4.1e: merge to `main`, check deep links on beta (CloudFront SPA fallback), approve prod. Then 4.2: Google sign-in via
-Cognito federation. See CLAUDE.md "Current step".
+Merge 4.2a + 4.2b to `main`, test the card and forgot password on beta, approve prod. Then 4.2c: Google sign-in via
+Cognito federation (c1 Cognito domain first). See CLAUDE.md "Current step".

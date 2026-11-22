@@ -89,11 +89,16 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   (prod allows only its CloudFront URL, so localhost can't call the prod API)
 - Frontend:
   - Amplify auth library only (no Amplify CLI/backend/hosting): signUp, confirmSignUp, signIn (SRP), signOut,
-    fetchAuthSession (auto-refreshes tokens). Tokens stored in localStorage (Amplify default)
+    resetPassword + confirmResetPassword (forgot password), fetchAuthSession (auto-refreshes tokens).
+    Tokens stored in localStorage (Amplify default)
   - Routing (4.1): React Router v8, declarative mode (`BrowserRouter` + `Routes`; v8 has no react-router-dom, import
     from `react-router`). App.tsx = route table only. Three layout routes: PublicLayout (`/`, `/privacy`, 404),
-    AuthLayout (`/login`, `/signup`, `/confirm?email=` inside GuestOnly), AppLayout sidebar (`/app`, `/app/profile`
-    inside RequireAuth)
+    AuthLayout (`/login`, `/signup`, `/confirm?email=`, `/forgot-password`, `/reset-password?email=` inside GuestOnly),
+    AppLayout sidebar (`/app`, `/app/profile` inside RequireAuth). Pages that need `?email=` redirect with
+    `<Navigate replace>` when it's missing
+  - Auth card (4.2b): AuthLayout = grey page + centred card. Login/signup pages show AuthTabs (NavLinks with `replace`,
+    so the tab is the URL) + SocialButtons (Google button, disabled until 4.2c) + "or" divider; confirm/forgot/reset
+    pages show only their form. Forgot/reset UI says "If an account exists…" (preventUserExistenceErrors)
   - Auth state: AuthProvider (src/auth) sets `status` (loading | signedIn | signedOut) from Amplify Hub `signedIn` /
     `signedOut` events + one getCurrentUser() at startup; nobody sets it by hand. `useAuth()` exposes
     `{ status, signOutMessage, signOut(message?) }`; RequireAuth passes `from` (redirect-back) + the message to /login
@@ -152,19 +157,26 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   checked via LastUpdatedTime); `git revert` → green through beta and prod
 
 - 4.1: React Router (a–d on `feature/4.1-router`): routes, AuthContext from Hub events + guards, sidebar app layout,
-  public landing / privacy / 404 pages. Tested locally
+  public landing / privacy / 404 pages. Deployed beta + prod; deep links work via the CloudFront SPA fallback
+- 4.2a: Forgot password (`/forgot-password` → email code → `/reset-password?email=`). Tested locally
+- 4.2b: Auth card (Sign in / Create account tabs, Google button placeholder, "or" divider). Tested locally
 
 ## Phase 4 plan (reusable starter for a future app)
 Public landing page, social login, user tiers, sidebar for signed-in pages.
 - 4.1: React Router; public `/`, `/login`, `/signup`, `/privacy`; protected `/app/*` layout with sidebar (frontend only)
-- 4.2: Google sign-in via Cognito federation (Cognito domain, IdP + attribute mapping, OAuth callbacks,
-  Amplify signInWithRedirect; CSP connect-src needs `https://*.amazoncognito.com`; account linking via PreSignUp later)
+- 4.2: a) forgot password, b) auth card, c) Google sign-in via Cognito federation: c1 Cognito domain (CDK) →
+  c2 Google Cloud OAuth client + consent screen (privacy URL, redirect `https://<prefix>.auth.us-west-2.amazoncognito.com/oauth2/idpresponse`)
+  → c3 client secret in Secrets Manager (~$0.40/month, one secret for beta + prod; SSM SecureString not supported for
+  this property) → c4 IdP + attribute mapping + app client OAuth callbacks (localhost, beta, prod) + CSP connect-src
+  `https://*.amazoncognito.com` → c5 Amplify oauth config + signInWithRedirect → c6 verify PostConfirmation for Google
+  users; account linking (same email, password + Google) via PreSignUp later
 - 4.3: Tiers: `tier` on USER#<sub>/PROFILE (set by PostConfirmation), GET /v1/users/me, Java tier checks → 403
   (DynamoDB, not Cognito groups: a payment webhook can change it instantly)
 - 4.4: Tier-gated pages (locked sidebar items, upgrade prompt), optional usage quotas (conditional UpdateItem)
-- Later: Apple sign-in (name only sent on first sign-in; pool requires given/family name), custom domain, Stripe
+- Later: custom domain, Stripe. Optional/paid: Apple sign-in (needs the $99/year Apple Developer Program; skipped
+  for budget. Name only sent on first sign-in; pool requires given/family name)
 
 ## Current step
-4.1e: merge `feature/4.1-router` → `main` (fast-forward), push; on beta check deep links via the CloudFront
-SPA fallback (reload `/app/profile`, open `/privacy` directly); approve prod. Then 4.2 (Google sign-in) on a new branch.
+4.2 merge: commit docs on `feature/4.2-auth-card`, fast-forward `main`, push; on beta check the card and run forgot
+password with a real email; approve prod. Then 4.2c (Google sign-in) on `feature/4.2c-google`, starting with c1.
 Workflow: `feature/*` branches; merge to `main` = deploy; put doc updates on the branch (one pipeline run).
