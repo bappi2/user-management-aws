@@ -1,26 +1,34 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { getCurrentUser } from 'aws-amplify/auth';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { getCurrentUser, signOut as amplifySignOut } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import { AuthContext, type AuthStatus } from './authContext';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
+  const [signOutMessage, setSignOutMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1. Listen first, so no event is missed
     const stopListening = Hub.listen('auth', ({ payload }) => {
-      if (payload.event === 'signedIn') setStatus('signedIn');
+      if (payload.event === 'signedIn') {
+        setSignOutMessage(null);               // old message no longer relevant
+        setStatus('signedIn');
+      }
       if (payload.event === 'signedOut') setStatus('signedOut');
     });
 
-    // 2. Ask once: are tokens already stored? (page reload)
     getCurrentUser().then(
       () => setStatus('signedIn'),
       () => setStatus('signedOut'),
     );
 
-    return stopListening;   // cleanup when the provider unmounts
+    return stopListening;
   }, []);
 
-  return <AuthContext value={{ status }}>{children}</AuthContext>;
+  // useCallback: the same function object on every render (see the note below)
+  const signOut = useCallback(async (message?: string) => {
+    setSignOutMessage(message ?? null);        // 1. remember why
+    await amplifySignOut();                    // 2. Hub 'signedOut' → status → RequireAuth redirects
+  }, []);
+
+  return <AuthContext value={{ status, signOutMessage, signOut }}>{children}</AuthContext>;
 }

@@ -1,15 +1,9 @@
 import { useEffect, useState } from 'react';
-import { fetchAuthSession, signOut } from 'aws-amplify/auth';
-import { ProfilePage } from './ProfilePage';
-
+import { fetchAuthSession } from 'aws-amplify/auth';
 
 type Claims = { email: string; sub: string; expiresAt: Date | null };
 
-type Props = {
-  onSignedOut: (message?: string) => void;
-};
-
-export function SignedIn({ onSignedOut }: Props) {
+export function HomePage() {
   const [claims, setClaims] = useState<Claims | null>(null);
 
   useEffect(() => {
@@ -29,23 +23,12 @@ export function SignedIn({ onSignedOut }: Props) {
     };
   }, []);
 
-  async function handleSignOut() {
-    await signOut();
-    onSignedOut();
-  }
-
-async function handleSessionExpired() {
-    await signOut();
-    onSignedOut('Your session expired. Please sign in again.');
-  }
-
-
   return (
     <section>
-      <h2>Signed in</h2>
+      <h2>Welcome</h2>
       {claims ? (
         <>
-          <p>Email: <strong>{claims.email}</strong></p>
+          <p>Signed in as <strong>{claims.email}</strong></p>
           <p className="hint">
             sub: {claims.sub}
             {claims.expiresAt && <> · ID token expires {claims.expiresAt.toLocaleTimeString()}</>}
@@ -54,9 +37,6 @@ async function handleSessionExpired() {
       ) : (
         <p className="hint">Loading session…</p>
       )}
-      <ProfilePage onSessionExpired={handleSessionExpired} />
-
-      <button onClick={handleSignOut}>Sign out</button>
     </section>
   );
 }

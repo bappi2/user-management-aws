@@ -1,45 +1,41 @@
+import { useCallback } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router';
 import './App.css';
-import { config } from './config';
-import { ConfirmSignUpForm } from './components/ConfirmSignUpForm';
-import { SignedIn } from './components/SignedIn';
-import { SignInForm } from './components/SignInForm';
-import { SignUpForm } from './components/SignUpForm';
+import { useAuth } from './auth/authContext';
 import { GuestOnly } from './auth/GuestOnly';
 import { RequireAuth } from './auth/RequireAuth';
+import { ConfirmSignUpForm } from './components/ConfirmSignUpForm';
+import { ProfilePage } from './components/ProfilePage';
+import { SignInForm } from './components/SignInForm';
+import { SignUpForm } from './components/SignUpForm';
+import { AppLayout } from './layouts/AppLayout';
+import { AuthLayout } from './layouts/AuthLayout';
+import { HomePage } from './pages/app/HomePage';
 
-
-
+/** Only the route table. Layout routes (no path) wrap their children via <Outlet />. */
 function App() {
-  const navigate = useNavigate();
-
-  // Hub already set status = signedOut; this only adds the optional message
-  function handleSignedOut(message?: string) {
-    navigate('/login', { replace: true, state: { message } });
-  }
-
   return (
-    <main className="app">
-      <h1>User Management</h1>
+    <Routes>
+      <Route path="/" element={<Navigate to="/app" replace />} />
 
-      <Routes>
-        <Route path="/" element={<Navigate to="/app" replace />} />
-
+      {/* Centered card: login, sign-up, confirm, 404 */}
+      <Route element={<AuthLayout />}>
         <Route element={<GuestOnly />}>
-          <Route path="/login" element={<LoginRoute />} />
-          <Route path="/signup" element={<SignUpRoute />} />
-          <Route path="/confirm" element={<ConfirmRoute />} />
+          <Route path="login" element={<LoginRoute />} />
+          <Route path="signup" element={<SignUpRoute />} />
+          <Route path="confirm" element={<ConfirmRoute />} />
         </Route>
-
-        <Route element={<RequireAuth />}>
-          <Route path="/app" element={<SignedIn onSignedOut={handleSignedOut} />} />
-        </Route>
-
         <Route path="*" element={<p>Page not found. <Link to="/">Go home</Link></p>} />
-      </Routes>
+      </Route>
 
-      <footer className="hint">stage: {config.stage} · API: {config.apiUrl}</footer>
-    </main>
+      {/* Signed-in area: guard → sidebar layout → page */}
+      <Route path="app" element={<RequireAuth />}>
+        <Route element={<AppLayout />}>
+          <Route index element={<HomePage />} />
+          <Route path="profile" element={<ProfileRoute />} />
+        </Route>
+      </Route>
+    </Routes>
   );
 }
 
@@ -59,7 +55,6 @@ function LoginRoute() {
     </>
   );
 }
-
 
 function SignUpRoute() {
   const navigate = useNavigate();
@@ -88,6 +83,16 @@ function ConfirmRoute() {
       }
     />
   );
+}
+
+/** Connects ProfilePage's "session expired" event to the auth context */
+function ProfileRoute() {
+  const { signOut } = useAuth();
+  const handleSessionExpired = useCallback(() => {
+    void signOut('Your session expired. Please sign in again.');
+  }, [signOut]);
+
+  return <ProfilePage onSessionExpired={handleSessionExpired} />;
 }
 
 export default App;

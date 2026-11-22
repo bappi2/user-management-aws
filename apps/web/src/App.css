@@ -53,3 +53,86 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* App shell: sidebar + content */
+.shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+  font-family: system-ui, sans-serif;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px 12px;
+  background: #fafafa;
+  border-right: 1px solid #e5e5e5;
+}
+
+.brand {
+  font-weight: 700;
+  padding: 0 8px;
+}
+
+.sidenav {
+  display: grid;
+  gap: 4px;
+}
+
+.sidenav a {
+  padding: 8px;
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.sidenav a:hover {
+  background: #eee;
+}
+
+.sidenav a.active {
+  background: #e3ecfd;
+  color: #0b57d0;
+  font-weight: 600;
+}
+
+.sidebar-footer {
+  margin-top: auto;            /* pushes Sign out to the bottom */
+  display: grid;
+  gap: 8px;
+}
+
+.content {
+  padding: 24px;
+  max-width: 720px;
+}
+
+/* Phones: sidebar becomes a top bar */
+@media (max-width: 640px) {
+  .shell {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+  .sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 12px;
+    border-right: none;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  .sidenav {
+    display: flex;
+  }
+  .sidebar-footer {
+    margin-top: 0;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+  }
+  .content {
+    padding: 16px;
+  }
+}
