@@ -101,15 +101,23 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   (prod allows only its CloudFront URL, so localhost can't call the prod API)
 - Frontend:
   - Amplify auth library only (no Amplify CLI/backend/hosting): signUp, confirmSignUp, signIn (SRP), signOut,
-    resetPassword + confirmResetPassword (forgot password), fetchAuthSession (auto-refreshes tokens).
-    Tokens stored in localStorage (Amplify default)
+    resetPassword + confirmResetPassword (forgot password), signInWithRedirect({ provider: 'Google' }),
+    fetchAuthSession (auto-refreshes tokens). Tokens stored in localStorage (Amplify default)
+  - Google redirect sign-in (4.2c5): auth.ts adds `loginWith.oauth` (domain = config.oauthDomain, scopes = the client's,
+    redirectSignIn `${window.location.origin}/auth/callback`, redirectSignOut `${origin}/login`, code) + imports
+    `aws-amplify/auth/enable-oauth-listener`. On configure Amplify exchanges `?code=` itself (PKCE), strips it from the
+    URL, fires Hub `signInWithRedirect` + `signedIn`; getCurrentUser() waits meanwhile (status stays `loading`).
+    AuthCallbackPage (`/auth/callback`, in AuthLayout but outside GuestOnly): loading → "Signing you in…",
+    signedIn → `/app`, `?error`/signedOut → "Sign-in failed". signOut for Google users redirects via Cognito
+    `/logout` → `/login` (clears the Cognito session cookie; the in-memory signOutMessage is lost on that reload);
+    password users: no redirect
   - Routing (4.1): React Router v8, declarative mode (`BrowserRouter` + `Routes`; v8 has no react-router-dom, import
     from `react-router`). App.tsx = route table only. Three layout routes: PublicLayout (`/`, `/privacy`, 404),
-    AuthLayout (`/login`, `/signup`, `/confirm?email=`, `/forgot-password`, `/reset-password?email=` inside GuestOnly),
+    AuthLayout (`/auth/callback`; `/login`, `/signup`, `/confirm?email=`, `/forgot-password`, `/reset-password?email=` inside GuestOnly),
     AppLayout sidebar (`/app`, `/app/profile` inside RequireAuth). Pages that need `?email=` redirect with
     `<Navigate replace>` when it's missing
   - Auth card (4.2b): AuthLayout = grey page + centred card. Login/signup pages show AuthTabs (NavLinks with `replace`,
-    so the tab is the URL) + SocialButtons (Google button, disabled until 4.2c) + "or" divider; confirm/forgot/reset
+    so the tab is the URL) + SocialButtons (Google button → signInWithRedirect) + "or" divider; confirm/forgot/reset
     pages show only their form. Forgot/reset UI says "If an account exists…" (preventUserExistenceErrors)
   - Auth state: AuthProvider (src/auth) sets `status` (loading | signedIn | signedOut) from Amplify Hub `signedIn` /
     `signedOut` events + one getCurrentUser() at startup; nobody sets it by hand. `useAuth()` exposes
@@ -120,7 +128,8 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
     `signOut('Your session expired…')`
   - GOTCHA: `npm run dev` does NOT type-check: a missing import is a blank page (ReferenceError in the Console).
     Run `npx tsc -b` when the page is blank. Router hooks throw outside `<BrowserRouter>`
-  - Config: `config.ts` loadConfig() → dev uses .env.local (scripts/env-from-stack.sh, VITE_* vars);
+  - Config: `config.ts` loadConfig() → dev uses .env.local (scripts/env-from-stack.sh, VITE_* vars incl.
+    VITE_OAUTH_DOMAIN from output AuthDomainUrl without https://; rerun the script after adding a value);
     hosted build fetches /config.json written by CDK (s3deploy Source.jsonData, deploy-time tokens). Same dist/ for every stage
 - CORS: allowed origins = config.web.allowedOrigins (beta: http://localhost:5173) + CloudFront URL (token).
   Three sources: RestApi defaultCorsPreflightOptions (OPTIONS), Java ApiHandler.withCors (echoes allowed Origin + Vary),
@@ -181,7 +190,11 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
 - 4.2c2: Google Cloud project + OAuth client (both Cognito redirect URIs), consent screen in Testing
 - 4.2c3: Client secret in SSM Parameter Store (free) instead of Secrets Manager
 - 4.2c4: Google IdP + app client OAuth (code flow, callbacks, scopes) + CSP amazoncognito.com; diff reviewed
-  (client updated in place, secret absent from cdk.out)
+  (client updated in place, secret absent from cdk.out). Deployed beta + prod. Backend-only test via the raw
+  `/oauth2/authorize` URL: user `google_<id>` (EXTERNAL_PROVIDER, email_verified true, names mapped) and
+  PostConfirmation fired on first federated sign-in → `USER#<sub>/PROFILE` written, no Java change needed
+- 4.2c5: React: Amplify oauth config, Google button (signInWithRedirect), `/auth/callback` page. Tested locally:
+  Google → /app, claims, profile GET/PUT, sign out via Cognito /logout, same sub on re-sign-in, password users unchanged
 
 ## Phase 4 plan (reusable starter for a future app)
 Public landing page, social login, user tiers, sidebar for signed-in pages.
@@ -199,7 +212,7 @@ Public landing page, social login, user tiers, sidebar for signed-in pages.
   for budget. Name only sent on first sign-in; pool requires given/family name)
 
 ## Current step
-4.2c4 deploy (branch `feature/4.2c-google`): commit c4 + docs, fast-forward `main`, push. On beta, test the backend
-without React: open `/oauth2/authorize?identity_provider=Google&client_id=<beta client>&response_type=code&scope=openid+email+profile&redirect_uri=http://localhost:5173/auth/callback`
-→ expect `?code=` on localhost; check the `Google_…` user in Cognito + `USER#<sub>` in DynamoDB. Then c5 (React).
+4.2c5 deploy (branch `feature/4.2c-google`): commit c5 + docs, fast-forward `main`, push. On beta (hosted): Google
+button end to end (this is where the CSP `*.amazoncognito.com` entry matters: the token fetch), sign out, password
+sign-in; approve prod. Then c6: account linking (same email as password user + Google → two users today).
 Workflow: `feature/*` branches; merge to `main` = deploy; put doc updates on the branch (one pipeline run).

@@ -471,6 +471,29 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
 - CSP connect-src + `https://*.amazoncognito.com` (Amplify fetches `/oauth2/token`; navigations aren't connect-src)
 - **Mistakes:** first diff had no ResponseHeadersPolicy change (CSP edit not made yet); second still dropped the admin
   scope (edit not made). The diff showed both → always check the diff for every intended change
+- Deployed (one run with docs). First raw-URL try → Cognito "An error was encountered with the requested page": too
+  early, the run was still at UpdatePipeline (no IdP in the pool yet). The reason is in the address bar (`?error=`), not
+  in the page HTML
+- Backend test without React: `/oauth2/authorize?identity_provider=Google&…&redirect_uri=http://localhost:5173/auth/callback`
+  → Google (shows the Cognito domain as app name: unverified branding) → consent (name, picture, email) →
+  `localhost:5173/auth/callback?code=…` (404 page, fine). Cognito user `google_<google id>`, EXTERNAL_PROVIDER,
+  email_verified true, names mapped. **PostConfirmation fires on the first federated sign-in** (log "profile created",
+  item `USER#<sub>/PROFILE`), SnapStart restore 660 ms + 796 ms. Prod approved
+
+### 4.2c5: Google button in React
+- Read Amplify 6.22.2 source first: `enableOAuthListener` completes the flow on the `configure` Hub event (inflight flag
+  + `?code=` → token fetch with PKCE → `history.replaceState` strips the code → Hub `signInWithRedirect` + `signedIn`);
+  `getCurrentUser`/`fetchAuthSession` wait while the exchange is in flight; `getRedirectUrl` picks the redirect URL
+  matching the current origin; `signOut` redirects to Cognito `/logout` only for OAuth sign-ins
+- env-from-stack.sh writes VITE_OAUTH_DOMAIN; config.ts `oauthDomain` in KEYS (fail early if missing); auth.ts
+  `loginWith.oauth` with redirect URLs from `window.location.origin` (same dist/ for every stage); SocialButtons calls
+  `signInWithRedirect({ provider: 'Google' })`; AuthCallbackPage maps loading / signedIn / signedOut(+`?error`)
+- Tested locally: Google → /app (claims `cognito:username google_…`, `identities`), profile loads + saves, sign out via
+  amazoncognito.com/logout → /login, same sub again, password sign-in unchanged. Cancel at Google not reachable (Google
+  skips screens after consent) → tested the error UI with `/auth/callback?error=access_denied&error_description=…`
+- **Mistakes:** replacing `SocialButtons` also deleted `GoogleIcon` → `Cannot find name 'GoogleIcon'` (tsc); password
+  sign-in "Incorrect username or password": typed the old 7-character password (policy is 8+) after the forgot-password
+  test had changed it
 
 ---
 
@@ -512,6 +535,9 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
 33. CDK sets OAuth defaults on every app client (example.com callback, implicit flow); set `oAuth` explicitly
 34. A resource referenced only by name (client → "Google") needs `node.addDependency`
 35. Moving CDK code doesn't change a resource; its construct ID does
+36. Cognito's generic error page hides the reason in the URL (`?error=`); check the pipeline really reached the stage
+37. When replacing "the function", keep its helpers (GoogleIcon) — tsc catches it, `npm run dev` shows a blank page
+38. CSP only exists on CloudFront: localhost can't prove the `connect-src` entry, the hosted beta test can
 
 ---
 
@@ -569,5 +595,5 @@ aws apigateway create-deployment --rest-api-id <id> --stage-name beta
 
 ## Next
 
-Deploy 4.2c4, test Google sign-in on beta via the raw `/oauth2/authorize` URL (backend only), check the Cognito user and
-DynamoDB item. Then c5: Amplify oauth config + signInWithRedirect + `/auth/callback`. See CLAUDE.md "Current step".
+Deploy 4.2c5, test the Google button on hosted beta (CSP), approve prod. Then c6: account linking. See CLAUDE.md
+"Current step".
