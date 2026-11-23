@@ -4,12 +4,12 @@ export type AppConfig = {
   apiUrl: string;
   userPoolId: string;
   userPoolClientId: string;
+  oauthDomain: string;
 };
 
-const KEYS = ['stage', 'region', 'apiUrl', 'userPoolId', 'userPoolClientId'] as const;
+const KEYS = ['stage', 'region', 'apiUrl', 'userPoolId', 'userPoolClientId', 'oauthDomain'] as const;
 
-/** Filled by loadConfig() BEFORE the app renders; import and use it anywhere after that. */
-export const config: AppConfig = { stage: '', region: '', apiUrl: '', userPoolId: '', userPoolClientId: '' };
+export const config: AppConfig = { stage: '', region: '', apiUrl: '', userPoolId: '', userPoolClientId: '', oauthDomain: '' };
 
 /**
  * npm run dev  → values from .env.local (scripts/env-from-stack.sh)
@@ -23,6 +23,7 @@ export async function loadConfig(): Promise<void> {
         apiUrl: import.meta.env.VITE_API_URL,
         userPoolId: import.meta.env.VITE_USER_POOL_ID,
         userPoolClientId: import.meta.env.VITE_USER_POOL_CLIENT_ID,
+        oauthDomain: import.meta.env.VITE_OAUTH_DOMAIN,
       }
     : await fetch('/config.json', { cache: 'no-store' }).then((response) => {
         if (!response.ok) {

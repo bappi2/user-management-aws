@@ -19,6 +19,7 @@ VITE_AWS_REGION=$REGION
 VITE_API_URL=$(output ApiUrl)
 VITE_USER_POOL_ID=$(output UserPoolId)
 VITE_USER_POOL_CLIENT_ID=$(output UserPoolClientId)
+VITE_OAUTH_DOMAIN=$(output AuthDomainUrl | sed 's#^https://##')
 EOF
 
 echo "Wrote .env.local for $STACK"
