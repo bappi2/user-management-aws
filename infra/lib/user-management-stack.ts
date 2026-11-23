@@ -1,4 +1,4 @@
-import { Stack, StackProps, RemovalPolicy, CfnOutput } from 'aws-cdk-lib';
+import { Stack, StackProps, RemovalPolicy, CfnOutput, SecretValue, CfnDynamicReference, CfnDynamicReferenceService } from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import { StageConfig } from '../config/types';
@@ -80,19 +80,7 @@ export class UserManagementStack extends Stack {
       removalPolicy: config.retainData ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
     });
 
-    // The React app (later) and the CLI (now) sign in through this client
-    const webClient = userPool.addClient('WebClient', {
-      userPoolClientName: `usermanagement-${config.stage}-web`,
-      generateSecret: false,
-      authFlows: { userSrp: true, userPassword: true },
-      preventUserExistenceErrors: true,
-      idTokenValidity: Duration.hours(1),
-      accessTokenValidity: Duration.hours(1),
-      refreshTokenValidity: Duration.days(30),
-    });
 
-    new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
-    new CfnOutput(this, 'UserPoolClientId', { value: webClient.userPoolClientId });
     // ---------- Cognito domain (4.2c): OAuth endpoints for social sign-in ----------
     // https://<prefix>.auth.<region>.amazoncognito.com
     //   /oauth2/authorize   app sends the browser here (with identity_provider=Google)
@@ -103,6 +91,24 @@ export class UserManagementStack extends Stack {
       managedLoginVersion: cognito.ManagedLoginVersion.CLASSIC_HOSTED_UI,
     });
     new CfnOutput(this, 'AuthDomainUrl', { value: authDomain.baseUrl() });
+
+    // ---------- Google sign-in (4.2c): Cognito federates to Google ----------
+    const googleProvider = new cognito.UserPoolIdentityProviderGoogle(this, 'GoogleProvider', {
+      userPool,
+      clientId: config.auth.googleClientId,
+      // Template contains {{resolve:ssm:/usermanagement/google-client-secret}}; CloudFormation reads the
+      // value at deploy time, so it's never in git or cdk.out. (ssm-secure isn't allowed for this property.)
+      clientSecretValue: SecretValue.cfnDynamicReference(
+        new CfnDynamicReference(CfnDynamicReferenceService.SSM, config.auth.googleClientSecretParameter),
+      ),
+      scopes: ['openid', 'email', 'profile'],       // CDK default is only 'profile' → no email!
+      attributeMapping: {
+        email: cognito.ProviderAttribute.GOOGLE_EMAIL,
+        emailVerified: cognito.ProviderAttribute.GOOGLE_EMAIL_VERIFIED,
+        givenName: cognito.ProviderAttribute.GOOGLE_GIVEN_NAME,     // pool requires given_name
+        familyName: cognito.ProviderAttribute.GOOGLE_FAMILY_NAME,   // pool requires family_name
+      },
+    });
 
     
     // ---------- Web hosting: private S3 bucket + CloudFront (Origin Access Control) ----------
@@ -123,8 +129,10 @@ export class UserManagementStack extends Stack {
         contentSecurityPolicy: {
           contentSecurityPolicy:
             "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
-            "connect-src 'self' https://*.amazonaws.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+            "connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
           override: true,
+            
+
         },
       },
     });
@@ -149,6 +157,38 @@ export class UserManagementStack extends Stack {
     const webOrigin = `https://${distribution.distributionDomainName}`;
     const allowedOrigins = [...config.web.allowedOrigins, webOrigin];   // localhost (beta) + CloudFront
 
+    // App client used by the React app (SRP + Google via OAuth) and the CLI (USER_PASSWORD)
+    // Defined after the distribution: OAuth callback URLs need the CloudFront URL.
+    const webClient = userPool.addClient('WebClient', {
+      userPoolClientName: `usermanagement-${config.stage}-web`,
+      generateSecret: false,
+      authFlows: { userSrp: true, userPassword: true },
+      preventUserExistenceErrors: true,
+      idTokenValidity: Duration.hours(1),
+      accessTokenValidity: Duration.hours(1),
+      refreshTokenValidity: Duration.days(30),
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.COGNITO,   // email + password (SRP)
+        cognito.UserPoolClientIdentityProvider.GOOGLE,
+      ],
+      oAuth: {
+        flows: { authorizationCodeGrant: true },          // code + PKCE (Amplify); no implicit flow
+                scopes: [
+          cognito.OAuthScope.OPENID,
+          cognito.OAuthScope.EMAIL,
+          cognito.OAuthScope.PROFILE,
+          cognito.OAuthScope.COGNITO_ADMIN,   // aws.cognito.signin.user.admin: self-service APIs (deleteUser…) for Google users too
+        ],
+        // Allow-list: Cognito rejects any other redirect_uri. localhost only on beta (config.web.allowedOrigins)
+        callbackUrls: allowedOrigins.map((origin) => `${origin}/auth/callback`),
+        logoutUrls: allowedOrigins.map((origin) => `${origin}/login`),
+      },
+    });
+    // The client references the provider by name ("Google"): create the provider first
+    webClient.node.addDependency(googleProvider);
+
+    new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
+    new CfnOutput(this, 'UserPoolClientId', { value: webClient.userPoolClientId });
 
     const functionName = `usermanagement-${config.stage}-api`;
 
@@ -359,6 +399,8 @@ export class UserManagementStack extends Stack {
           apiUrl: api.url,
           userPoolId: userPool.userPoolId,
           userPoolClientId: webClient.userPoolClientId,
+          oauthDomain: `${config.auth.domainPrefix}.auth.${this.region}.amazoncognito.com`,
+
         }),
       ],
       destinationBucket: webBucket,

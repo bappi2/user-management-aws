@@ -16,7 +16,12 @@ export const STAGES: Record<Stage, StageConfig> = {
     api: { throttleRateLimit: 10, throttleBurstLimit: 20 },
     // beta:
     web: { allowedOrigins: ['http://localhost:5173'] },
-    auth: { domainPrefix: 'usermanagement-beta' },
+    auth: {
+      domainPrefix: 'usermanagement-beta',     // prod: 'usermanagement-prod'
+      googleClientId: '431777174815-03qcn92i28dtl0m2g9lp194gtkkfdq67.apps.googleusercontent.com',
+      googleClientSecretParameter: '/usermanagement/google-client-secret',
+    },
+
   },
   prod: {
     stage: 'prod',
@@ -27,7 +32,11 @@ export const STAGES: Record<Stage, StageConfig> = {
     api: { throttleRateLimit: 10, throttleBurstLimit: 20 },
     // prod:
     web: { allowedOrigins: [] },   // CloudFront URL added in 2.5
-    auth: { domainPrefix: 'usermanagement-prod' },
+    auth: {
+      domainPrefix: 'usermanagement-prod',
+      googleClientId: '431777174815-03qcn92i28dtl0m2g9lp194gtkkfdq67.apps.googleusercontent.com',
+      googleClientSecretParameter: '/usermanagement/google-client-secret',
+    },
   },
 
 };

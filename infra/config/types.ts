@@ -19,7 +19,10 @@ export interface StageConfig {
     readonly allowedOrigins: string[];   // browser origins allowed to call the API (CORS)
   };
   readonly auth: {
-    readonly domainPrefix: string;   // https://<prefix>.auth.<region>.amazoncognito.com (globally unique per region)
+    readonly domainPrefix: string;                 // https://<prefix>.auth.<region>.amazoncognito.com (globally unique per region)
+    readonly googleClientId: string;               // public (appears in sign-in URLs)
+    readonly googleClientSecretParameter: string;  // SSM parameter name holding the secret (created by hand, 4.2c3)
   };
+
 
 }
