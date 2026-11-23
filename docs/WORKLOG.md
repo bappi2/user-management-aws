@@ -432,6 +432,45 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
   drawn with `::before`/`::after` flex lines. `<h2>` removed from SignInForm/SignUpForm (tabs say it)
 - CSS scoped to `.auth-card .form button[type="submit"]` so ProfileForm and "Resend code" aren't affected;
   `font: inherit` before `font-weight` (shorthand resets it)
+- Merged with docs (e262af1), beta: all 8 checks incl. real forgot-password email; prod approved. Pipeline built the
+  same asset hashes as the local build (Vite names files by content hash)
+
+### 4.2c1: Cognito domain
+- Branch `feature/4.2c-google`. OAuth (social sign-in) works with browser redirects, so Cognito needs a web address:
+  `userPool.addDomain` with `cognitoDomain.domainPrefix` from config (`auth.domainPrefix`; globally unique per region,
+  checked free with `dig`). `CLASSIC_HOSTED_UI` (never shown; works on every feature plan). Output `AuthDomainUrl`
+- Deployed alone first so the URL existed before Google setup. Verified: `describe-user-pool-domain` ACTIVE, DNS resolves
+
+### 4.2c2: Google OAuth client
+- New Google Cloud project `user-management` ("free trial is over" banner is irrelevant: OAuth is always free)
+- Google Auth Platform: External audience, Testing mode, my Gmail as test user; branding left empty (the privacy URL is on
+  cloudfront.net, which can't be verified as mine → needed only for publishing)
+- Web client with JavaScript origins = both Cognito domains, redirect URIs = both + `/oauth2/idpresponse`. Google talks
+  only to Cognito, never to the app → one client serves beta and prod
+- **Mistake:** pasted the redirect URI into the origins box → "URIs must not contain a path". Origin = scheme + host;
+  redirect URI = exact string (typo → `redirect_uri_mismatch`)
+- Google shows the client secret only once (downloaded JSON)
+
+### 4.2c3: Client secret (free)
+- Planned Secrets Manager (~$0.40/month). Switched to SSM Parameter Store **String** (standard tier, free):
+  `ssm-secure` dynamic references only work for a short list of properties (not Cognito IdP), and Cognito returns the
+  secret via DescribeIdentityProvider anyway, so Secrets Manager adds little in a one-person account
+- `put-parameter --value "$(jq -r .web.client_secret "$F")"` straight from the downloaded JSON (no copy/paste, not in
+  history), checked with `awk` (prefix + length only), then deleted the JSON
+
+### 4.2c4: Google IdP + OAuth client settings
+- `UserPoolIdentityProviderGoogle`: `clientSecretValue: SecretValue.cfnDynamicReference(new CfnDynamicReference(SSM, name))`
+  → template has `{{resolve:ssm:…}}`, 0 hits for the secret in cdk.out. Scopes openid/email/profile (CDK default is
+  only profile → no email). Mapping email, email_verified, given_name, family_name (pool requires the names)
+- App client moved below the distribution (callback URLs need the CloudFront URL); same construct ID `WebClient` →
+  same client, in-place update. COGNITO + Google, code flow only, callback `/auth/callback`, logout `/login`,
+  `addDependency(googleProvider)` (client names "Google" only as a string)
+- Diff surprises: CDK had silently set OAuth defaults (`https://example.com`, implicit flow, all scopes). Kept
+  `aws.cognito.signin.user.admin` (deleteUser etc. for Google users). JAR hash changes on every `mvn package`
+  (timestamps) → new Lambda versions each deploy; harmless, backlog item
+- CSP connect-src + `https://*.amazoncognito.com` (Amplify fetches `/oauth2/token`; navigations aren't connect-src)
+- **Mistakes:** first diff had no ResponseHeadersPolicy change (CSP edit not made yet); second still dropped the admin
+  scope (edit not made). The diff showed both → always check the diff for every intended change
 
 ---
 
@@ -468,6 +507,11 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
 28. Blank page in dev = runtime error before render; check the browser Console, then `npx tsc -b` (Vite doesn't type-check)
 29. Relative paths in git/mv/cat depend on the current folder: `git add CLAUDE.md` from `services/user-api` stages nothing
 30. Renaming a file doesn't rename its export; imports ask for the export name
+31. OAuth origin (scheme + host, no path) ≠ redirect URI (exact full string)
+32. CloudFormation `ssm-secure` references only work for a few properties; `ssm` (plain String) works everywhere
+33. CDK sets OAuth defaults on every app client (example.com callback, implicit flow); set `oAuth` explicitly
+34. A resource referenced only by name (client → "Google") needs `node.addDependency`
+35. Moving CDK code doesn't change a resource; its construct ID does
 
 ---
 
@@ -525,5 +569,5 @@ aws apigateway create-deployment --rest-api-id <id> --stage-name beta
 
 ## Next
 
-Merge 4.2a + 4.2b to `main`, test the card and forgot password on beta, approve prod. Then 4.2c: Google sign-in via
-Cognito federation (c1 Cognito domain first). See CLAUDE.md "Current step".
+Deploy 4.2c4, test Google sign-in on beta via the raw `/oauth2/authorize` URL (backend only), check the Cognito user and
+DynamoDB item. Then c5: Amplify oauth config + signInWithRedirect + `/auth/callback`. See CLAUDE.md "Current step".

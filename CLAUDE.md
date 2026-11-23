@@ -49,6 +49,18 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
 - Cognito: email sign-in, case-insensitive, required given_name/family_name (immutable after pool creation!),
   password policy 8+ upper/lower/digit, EMAIL_ONLY recovery, self sign-up with email code (default sender ~50/day).
   App client: no secret, SRP + USER_PASSWORD (password flow only for CLI testing), preventUserExistenceErrors, 1h tokens
+- Google sign-in (4.2c): Cognito domain `https://<config.auth.domainPrefix>.auth.us-west-2.amazoncognito.com`
+  (classic hosted UI, never shown: `identity_provider=Google` goes straight to Google). One Google Cloud project
+  `user-management` + one Web OAuth client for beta AND prod (redirect URIs = both Cognito domains + `/oauth2/idpresponse`;
+  consent screen External, Testing mode, test users only). Client ID in environments.ts (public); client secret in
+  SSM Parameter Store String `/usermanagement/google-client-secret` (free; created by hand; CDK uses
+  `{{resolve:ssm:…}}` so it's never in git/cdk.out; ssm-secure isn't allowed for this property; Cognito returns it via
+  DescribeIdentityProvider anyway, so Secrets Manager adds little here). IdP scopes openid/email/profile, mapping
+  email, email_verified, given_name, family_name. App client: COGNITO + Google, code flow only (no implicit), scopes
+  openid/email/profile/aws.cognito.signin.user.admin (self-service APIs like deleteUser for Google users),
+  callback `<origin>/auth/callback`, logout `<origin>/login` for every allowedOrigin (localhost only on beta).
+  Client defined after the distribution (needs the CloudFront URL) + `addDependency(googleProvider)`.
+  config.json carries `oauthDomain` (no https://)
 - Trigger: SnapStart + alias + read-only priming; timeout 5s (Cognito limit). Admin-created users don't fire it
 - IAM narrowed: API fn GetItem+UpdateItem; trigger fn PutItem+GetItem
 - Authorizer errors: missing token → 401 (UNAUTHORIZED), invalid token → 403 (ACCESS_DENIED); both Problem Details.
@@ -117,7 +129,9 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   HTTPS redirect, PRICE_CLASS_100, SPA fallback (403/404 → /index.html). Cache: hashed assets
   `public, max-age=31536000, immutable`; index.html + config.json `no-cache` + invalidated on deploy (two BucketDeployments, prune false)
 - Security headers (ResponseHeadersPolicy): HSTS 1y, CSP `default-src 'self'; script-src 'self'; style-src 'self';
-  connect-src 'self' https://*.amazonaws.com; frame-ancestors 'none'`, X-Frame-Options DENY, nosniff, referrer policy
+  connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com; frame-ancestors 'none'`, X-Frame-Options DENY,
+  nosniff, referrer policy. amazoncognito.com is for Amplify's fetch to `/oauth2/token`; redirects to Cognito/Google
+  are navigations, not covered by connect-src. CSP only exists on CloudFront (dev server has none)
 - Hardening backlog: HIGH: stop using the root user (MFA on root, IAM Identity Center admin for console/CLI/approvals;
   prod was approved as root in 3.5); pipeline notifications (SNS/chatbot on approval waiting + failure);
   CodeBuild cache for npm/Maven; self-service account deletion (privacy page promises deletion on request); pipeline trigger file-path filter (skip docs-only pushes: `docs/**`, `*.md`); smoke test: route check via `get-export` + real sign-in (test user);
@@ -125,7 +139,10 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   CodeDeploy canary on alias; disable USER_PASSWORD_AUTH in prod; SES for Cognito email; $default model or reject
   non-JSON content types; sync profile email when Cognito email changes;
   tokens in cookies (Amplify CookieStorage) instead of localStorage; update typescript-eslint when minimatch fix ships;
-  custom domain + ACM (optional 2.6); multi-region DynamoDB later (TableV2 replicas; Lambda/API/Cognito are regional)
+  custom domain + ACM (optional 2.6); multi-region DynamoDB later (TableV2 replicas; Lambda/API/Cognito are regional);
+  Google client secret → Secrets Manager once there's a team / separate prod account; reproducible JAR
+  (`project.build.outputTimestamp`: today every build changes the JAR hash → new Lambda versions on every deploy);
+  publish Google consent screen (needs a verifiable domain for the privacy URL, i.e. custom domain)
 - Prod readiness (before real users): retainData true, PITR on, table deletionProtection, separate account
   (deploy via pipeline: done in 3.5)
 
@@ -158,16 +175,21 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
 
 - 4.1: React Router (a–d on `feature/4.1-router`): routes, AuthContext from Hub events + guards, sidebar app layout,
   public landing / privacy / 404 pages. Deployed beta + prod; deep links work via the CloudFront SPA fallback
-- 4.2a: Forgot password (`/forgot-password` → email code → `/reset-password?email=`). Tested locally
-- 4.2b: Auth card (Sign in / Create account tabs, Google button placeholder, "or" divider). Tested locally
+- 4.2a: Forgot password (`/forgot-password` → email code → `/reset-password?email=`). Deployed beta + prod, tested on beta
+- 4.2b: Auth card (Sign in / Create account tabs, Google button placeholder, "or" divider). Deployed beta + prod
+- 4.2c1: Cognito domains usermanagement-beta / usermanagement-prod (ACTIVE, deployed)
+- 4.2c2: Google Cloud project + OAuth client (both Cognito redirect URIs), consent screen in Testing
+- 4.2c3: Client secret in SSM Parameter Store (free) instead of Secrets Manager
+- 4.2c4: Google IdP + app client OAuth (code flow, callbacks, scopes) + CSP amazoncognito.com; diff reviewed
+  (client updated in place, secret absent from cdk.out)
 
 ## Phase 4 plan (reusable starter for a future app)
 Public landing page, social login, user tiers, sidebar for signed-in pages.
 - 4.1: React Router; public `/`, `/login`, `/signup`, `/privacy`; protected `/app/*` layout with sidebar (frontend only)
 - 4.2: a) forgot password, b) auth card, c) Google sign-in via Cognito federation: c1 Cognito domain (CDK) →
-  c2 Google Cloud OAuth client + consent screen (privacy URL, redirect `https://<prefix>.auth.us-west-2.amazoncognito.com/oauth2/idpresponse`)
-  → c3 client secret in Secrets Manager (~$0.40/month, one secret for beta + prod; SSM SecureString not supported for
-  this property) → c4 IdP + attribute mapping + app client OAuth callbacks (localhost, beta, prod) + CSP connect-src
+  c2 Google Cloud OAuth client + consent screen (redirect `https://<prefix>.auth.us-west-2.amazoncognito.com/oauth2/idpresponse`)
+  → c3 client secret in SSM Parameter Store String (free) → c4 IdP + attribute mapping + app client OAuth callbacks
+  (localhost, beta, prod) + CSP connect-src
   `https://*.amazoncognito.com` → c5 Amplify oauth config + signInWithRedirect → c6 verify PostConfirmation for Google
   users; account linking (same email, password + Google) via PreSignUp later
 - 4.3: Tiers: `tier` on USER#<sub>/PROFILE (set by PostConfirmation), GET /v1/users/me, Java tier checks → 403
@@ -177,6 +199,7 @@ Public landing page, social login, user tiers, sidebar for signed-in pages.
   for budget. Name only sent on first sign-in; pool requires given/family name)
 
 ## Current step
-4.2 merge: commit docs on `feature/4.2-auth-card`, fast-forward `main`, push; on beta check the card and run forgot
-password with a real email; approve prod. Then 4.2c (Google sign-in) on `feature/4.2c-google`, starting with c1.
+4.2c4 deploy (branch `feature/4.2c-google`): commit c4 + docs, fast-forward `main`, push. On beta, test the backend
+without React: open `/oauth2/authorize?identity_provider=Google&client_id=<beta client>&response_type=code&scope=openid+email+profile&redirect_uri=http://localhost:5173/auth/callback`
+→ expect `?code=` on localhost; check the `Google_…` user in Cognito + `USER#<sub>` in DynamoDB. Then c5 (React).
 Workflow: `feature/*` branches; merge to `main` = deploy; put doc updates on the branch (one pipeline run).
