@@ -27,6 +27,9 @@ public final class ApiException extends RuntimeException {
     public static ApiException unauthorized() {
         return new ApiException(401, "Auth.Unauthorized", "Missing or invalid user identity", null);
     }
+    public static ApiException forbidden(String title, String detail) {
+        return new ApiException(403, title, detail, null);
+    }
 
     public static ApiException notFound(String title, String detail) {
         return new ApiException(404, title, detail, null);

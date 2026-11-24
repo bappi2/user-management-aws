@@ -39,6 +39,7 @@ public final class DynamoDbUserRepository implements UserRepository {
                             "email", s(user.email()),
                             "firstName", s(user.firstName()),
                             "lastName", s(user.lastName()),
+                            "tier", s(user.tier().name()),
                             "createdAt", s(now),
                             "updatedAt", s(now)))
                     .conditionExpression("attribute_not_exists(pk)"));
@@ -106,11 +107,14 @@ public final class DynamoDbUserRepository implements UserRepository {
         }
 
         Map<String, AttributeValue> item = response.item();
+        AttributeValue tier = item.get("tier");                 // null for profiles created before 4.3
         return Optional.of(new User(
                 item.get("id").s(),
                 item.get("email").s(),
                 item.get("firstName").s(),
-                item.get("lastName").s()));
+                item.get("lastName").s(),
+                Tier.fromStored(tier == null ? null : tier.s())));
+
     }
 
     @Override

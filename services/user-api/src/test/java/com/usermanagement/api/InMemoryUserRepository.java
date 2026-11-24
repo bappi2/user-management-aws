@@ -29,7 +29,7 @@ class InMemoryUserRepository implements UserRepository {
         if (existing == null) {
             return false;
         }
-        usersById.put(id, new User(existing.id(), existing.email(), firstName, lastName));
+        usersById.put(id, new User(existing.id(), existing.email(), firstName, lastName, existing.tier()));
         return true;
     }
 }

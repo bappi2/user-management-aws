@@ -38,11 +38,12 @@ public class PostConfirmationHandler
         }
 
         Map<String, String> attributes = event.getRequest().getUserAttributes();
-        User user = new User(
+                User user = new User(
                 attributes.get("sub"),
                 attributes.get("email").toLowerCase(Locale.ROOT),
                 attributes.get("given_name"),
-                attributes.get("family_name"));
+                attributes.get("family_name"),
+                Tier.FREE);
 
         boolean created = users.insert(user);
         log(context, "PostConfirmation sub=" + user.id() + (created ? " profile created" : " profile already existed"));

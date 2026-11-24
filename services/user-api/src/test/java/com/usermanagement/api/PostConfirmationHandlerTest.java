@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.amazonaws.services.lambda.runtime.events.CognitoUserPoolPostConfirmationEvent;
 import com.usermanagement.api.users.PostConfirmationHandler;
+import com.usermanagement.api.users.Tier;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,8 @@ class PostConfirmationHandlerTest {
         var user = users.findById("sub-123").orElseThrow();
         assertEquals("jane@example.com", user.email()); // normalised
         assertEquals("Jane", user.firstName());
+        assertEquals(Tier.FREE, user.tier());  // every new user starts on FREE
+
     }
 
     @Test

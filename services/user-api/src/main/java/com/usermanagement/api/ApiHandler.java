@@ -8,7 +8,8 @@ import com.usermanagement.api.http.ApiException;
 import com.usermanagement.api.http.HttpResponses;
 import com.usermanagement.api.http.Json;
 import com.usermanagement.api.users.GetUserProfile;
-// import com.usermanagement.api.users.RegisterUser;
+import com.usermanagement.api.users.GetMe;
+import com.usermanagement.api.users.GetProDemo;
 import com.usermanagement.api.users.UpdateUserProfile;
 import com.usermanagement.api.users.UserRepository;
 import java.util.List;
@@ -32,7 +33,6 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
     private final Map<String, Endpoint> routes;
     private final Set<String> allowedOrigins;
 
-
     /** Called by the Lambda runtime once per cold start. */
     public ApiHandler() {
         this(new DynamoDbUserRepository(AwsClients.dynamoDb(), AwsClients.requireEnv("TABLE_NAME")),
@@ -48,11 +48,14 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
     ApiHandler(UserRepository users, Set<String> allowedOrigins) {
         List<Endpoint> endpoints = List.of(
                 new GetUserProfile(users),
-                new UpdateUserProfile(users));
+                new UpdateUserProfile(users),
+                new GetMe(users),
+                new GetProDemo(users));
         this.routes = endpoints.stream()
                 .collect(Collectors.toUnmodifiableMap(Endpoint::routeKey, endpoint -> endpoint));
         this.allowedOrigins = allowedOrigins;
     }
+
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent event, Context context) {
         return withCors(event, route(event, context));

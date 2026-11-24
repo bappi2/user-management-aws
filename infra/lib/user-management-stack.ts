@@ -360,7 +360,9 @@ export class UserManagementStack extends Stack {
     const integration = new apigw.LambdaIntegration(liveAlias);
 
 
-    const users = api.root.addResource('v1').addResource('users');
+    const v1 = api.root.addResource('v1');
+    const users = v1.addResource('users');
+
 
    // Evently: GetUserProfile / UpdateUserProfile (.RequireAuthorization -> Cognito later)
     const profile = users.addResource('profile');
@@ -373,6 +375,17 @@ export class UserManagementStack extends Stack {
       authorizationType: apigw.AuthorizationType.COGNITO,
       requestValidator: bodyValidator,
       requestModels: { 'application/json': updateUserProfileModel },
+    });
+    // 4.3: who am I + tier (profile fields + tier; tutorialVersion later)
+    users.addResource('me').addMethod('GET', integration, {
+      authorizer,
+      authorizationType: apigw.AuthorizationType.COGNITO,
+    });
+
+    // 4.3: demo of a tier-gated endpoint (Java returns 403 Tier.Required below PRO)
+    v1.addResource('demo').addResource('pro').addMethod('GET', integration, {
+      authorizer,
+      authorizationType: apigw.AuthorizationType.COGNITO,
     });
 
 

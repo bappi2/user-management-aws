@@ -7,6 +7,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.JsonNode;
 import com.usermanagement.api.http.Json;
 import com.usermanagement.api.users.User;
+import com.usermanagement.api.users.Tier;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,13 +15,15 @@ import org.junit.jupiter.api.Test;
 class ApiHandlerTest {
 
     private static final String USER_ID = "user-1";
+    private static final String PRO_USER_ID = "user-pro";
 
     private ApiHandler handler;
 
     @BeforeEach
     void setUp() {
         var users = new InMemoryUserRepository();
-        users.insert(new User(USER_ID, "jane@example.com", "Jane", "Doe"));
+        users.insert(new User(USER_ID, "jane@example.com", "Jane", "Doe", Tier.FREE));
+        users.insert(new User(PRO_USER_ID, "pat@example.com", "Pat", "Pro", Tier.PRO));
         handler = new ApiHandler(users);
     }
 
@@ -78,6 +81,29 @@ class ApiHandlerTest {
         assertEquals(404, response.getStatusCode());
         assertEquals("Route.NotFound", body(response).get("title").asText());
     }
+        @Test
+    void meReturnsTier() throws Exception {
+        var response = call("GET", "/v1/users/me", null, USER_ID);
+
+        assertEquals(200, response.getStatusCode());
+        assertEquals("FREE", body(response).get("tier").asText());
+    }
+
+    @Test
+    void freeUserGets403OnProEndpoint() throws Exception {
+        var response = call("GET", "/v1/demo/pro", null, USER_ID);
+
+        assertEquals(403, response.getStatusCode());
+        assertEquals("Tier.Required", body(response).get("title").asText());
+    }
+
+    @Test
+    void proUserGetsProEndpoint() throws Exception {
+        var response = call("GET", "/v1/demo/pro", null, PRO_USER_ID);
+
+        assertEquals(200, response.getStatusCode());
+    }
+
 
     // --- helpers -------------------------------------------------------------
 
@@ -101,7 +127,7 @@ class ApiHandlerTest {
         @Test
     void allowedOriginGetsCorsHeader() {
         var users = new InMemoryUserRepository();
-        users.insert(new User(USER_ID, "jane@example.com", "Jane", "Doe"));
+        users.insert(new User(USER_ID, "jane@example.com", "Jane", "Doe", Tier.FREE));
         var corsHandler = new ApiHandler(users, java.util.Set.of("http://localhost:5173"));
 
         var event = profileRequestWithOrigin("http://localhost:5173");
