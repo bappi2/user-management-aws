@@ -495,6 +495,30 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
   sign-in "Incorrect username or password": typed the old 7-character password (policy is 8+) after the forgot-password
   test had changed it
 
+### 4.2c6: Account linking (deferred)
+- Same email via password and via Google = two Cognito users, two subs, two profiles. Fix needs a PreSignUp trigger +
+  `AdminLinkProviderForUser`. Chose to defer it to the backlog ("before real users") and move on to tiers
+
+### 4.3a: Tier model
+- `Tier` enum FREE, PRO (BUSINESS dropped for now: one line to add later, at the end, since declaration order = rank).
+  `fromStored`: null/unknown → FREE (fail closed, old profiles need no migration); `includes` = `compareTo >= 0`
+- `User` record gets `tier`; adding a record component makes the compiler list every `new User(...)` (the to-do list).
+  PostConfirmation writes `tier: FREE` (insert Map.of now has 10 pairs = Map.of's maximum)
+- **Mistakes:** ran `mvn` from `services/` (no pom.xml there); missed the two `new User` calls in ApiHandlerTest
+
+### 4.3b: GET /v1/users/me + tier check
+- `ApiException.forbidden`, `TierCheck.require(user, tier)` → 403 Problem Details `Tier.Required`; endpoints `GetMe`
+  (profile + tier) and `GetProDemo` (`GET /v1/demo/pro`); tier read from DynamoDB per request, not from the token.
+  Tests: FREE gets 403, PRO gets 200, /me shows FREE → 19 tests
+- **Mistakes:** pasted the new endpoint list as a class field → `cannot find symbol: users` (constructor parameter only
+  exists inside the constructor); `grep surefire-reports` after a failed build showed stale counts → chain with `&&`
+
+### 4.3c: CDK routes
+- `v1` kept in a variable (same construct ID → no change), `users/me` and `v1/demo/pro` GET with the Cognito authorizer,
+  no model (no body). Diff: 3 Resources, GET/OPTIONS Methods, 4 Lambda Permissions, new Deployment; both functions get
+  the new JAR (PostConfirmation really changed: writes tier). Nothing stateful touched
+- `cdk diff` needs the construct path (`UserManagement-Pipeline/beta/UserManagement`), not the stack name; `cdk ls` shows both
+
 ---
 
 ## Gotchas collected
@@ -538,6 +562,9 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
 36. Cognito's generic error page hides the reason in the URL (`?error=`); check the pipeline really reached the stage
 37. When replacing "the function", keep its helpers (GoogleIcon) — tsc catches it, `npm run dev` shows a blank page
 38. CSP only exists on CloudFront: localhost can't prove the `connect-src` entry, the hosted beta test can
+39. Test reports in `target/surefire-reports` survive a failed build: read counts only after BUILD SUCCESS (`mvn package && grep …`)
+40. A 403 now has two meanings: authorizer (bad token → sign in again) vs Java `Tier.Required` (upgrade prompt); check the title
+41. `cdk diff <path>`: stage stacks are addressed by construct path, not CloudFormation stack name (`npx cdk ls`)
 
 ---
 
@@ -595,5 +622,5 @@ aws apigateway create-deployment --rest-api-id <id> --stage-name beta
 
 ## Next
 
-Deploy 4.2c5, test the Google button on hosted beta (CSP), approve prod. Then c6: account linking. See CLAUDE.md
+Deploy 4.3a–c, test tiers on beta (upgrade via `update-item`), approve prod. Then 4.3d tutorialVersion. See CLAUDE.md
 "Current step".

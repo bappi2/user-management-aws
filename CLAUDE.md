@@ -64,7 +64,13 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
 - Trigger: SnapStart + alias + read-only priming; timeout 5s (Cognito limit). Admin-created users don't fire it
 - IAM narrowed: API fn GetItem+UpdateItem; trigger fn PutItem+GetItem
 - Authorizer errors: missing token → 401 (UNAUTHORIZED), invalid token → 403 (ACCESS_DENIED); both Problem Details.
-  Frontend must treat 401 and 403 from /profile as "sign in again"
+  Frontend must treat 401 and 403 from /profile as "sign in again". Exception (4.3): 403 with title `Tier.Required`
+  comes from Java (valid user, tier too low) → show upgrade prompt, not sign-in
+- Tiers (4.3): enum `Tier` FREE < PRO (declaration order = rank via `includes`; add BUSINESS etc. at the end when
+  needed). Stored as the name on USER#<sub>/PROFILE `tier`; missing/unknown → FREE (fail closed, no migration).
+  PostConfirmation writes FREE. Read from DynamoDB on every gated call (not from the token: upgrades apply on the next
+  request). `TierCheck.require(user, Tier.PRO)` → 403 Problem Details `Tier.Required`. API Gateway only checks
+  identity; Java checks the tier. Users can't change their tier (no API); today: `aws dynamodb update-item` by hand
 - GOTCHA: removing a REST API route via CDK can leave it live in the stage (Deployment snapshot is taken before
   CFN cleanup deletes the old Method). After removing routes, verify the stage with
   `aws apigateway get-export --stage-name <stage> --export-type oas30` and `create-deployment` if needed
@@ -141,7 +147,13 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com; frame-ancestors 'none'`, X-Frame-Options DENY,
   nosniff, referrer policy. amazoncognito.com is for Amplify's fetch to `/oauth2/token`; redirects to Cognito/Google
   are navigations, not covered by connect-src. CSP only exists on CloudFront (dev server has none)
-- Hardening backlog: HIGH: stop using the root user (MFA on root, IAM Identity Center admin for console/CLI/approvals;
+- Hardening backlog: BEFORE REAL USERS: account linking (decided 4.2c6: deferred). Today the same email via password
+  and via Google = two Cognito users, two subs, two profiles/tiers. Plan: PreSignUp trigger (Java); on
+  PreSignUp_ExternalProvider, if a CONFIRMED native user has that email and Google says email_verified → 
+  AdminLinkProviderForUser (Google becomes a second login for the same sub); on PreSignUp_SignUp, reject if a
+  federated user owns the email. IAM via a hand-built pool ARN (grant on userPool.userPoolArn = circular dependency).
+  Known quirk: the first linked sign-in fails once ("Already found an entry"), retry works.
+  HIGH: stop using the root user (MFA on root, IAM Identity Center admin for console/CLI/approvals;
   prod was approved as root in 3.5); pipeline notifications (SNS/chatbot on approval waiting + failure);
   CodeBuild cache for npm/Maven; self-service account deletion (privacy page promises deletion on request); pipeline trigger file-path filter (skip docs-only pushes: `docs/**`, `*.md`); smoke test: route check via `get-export` + real sign-in (test user);
   Powertools (logging, metrics, tracing, idempotency); DynamoDB Local/Testcontainers tests;
@@ -194,7 +206,11 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   `/oauth2/authorize` URL: user `google_<id>` (EXTERNAL_PROVIDER, email_verified true, names mapped) and
   PostConfirmation fired on first federated sign-in → `USER#<sub>/PROFILE` written, no Java change needed
 - 4.2c5: React: Amplify oauth config, Google button (signInWithRedirect), `/auth/callback` page. Tested locally:
-  Google → /app, claims, profile GET/PUT, sign out via Cognito /logout, same sub on re-sign-in, password users unchanged
+  Google → /app, claims, profile GET/PUT, sign out via Cognito /logout, same sub on re-sign-in, password users unchanged.
+  Deployed beta (hosted Google sign-in incl. CSP token fetch) + prod
+- 4.2c6: account linking deferred (backlog, before real users)
+- 4.3a–c: Tier enum (FREE, PRO) + `tier` on PROFILE, GET /v1/users/me, TierCheck → 403 `Tier.Required`, demo
+  GET /v1/demo/pro, CDK routes (Cognito authorizer, no model); 19 JUnit tests; diff reviewed (additions only)
 
 ## Phase 4 plan (reusable starter for a future app)
 Public landing page, social login, user tiers, sidebar for signed-in pages.
@@ -203,16 +219,24 @@ Public landing page, social login, user tiers, sidebar for signed-in pages.
   c2 Google Cloud OAuth client + consent screen (redirect `https://<prefix>.auth.us-west-2.amazoncognito.com/oauth2/idpresponse`)
   → c3 client secret in SSM Parameter Store String (free) → c4 IdP + attribute mapping + app client OAuth callbacks
   (localhost, beta, prod) + CSP connect-src
-  `https://*.amazoncognito.com` → c5 Amplify oauth config + signInWithRedirect → c6 verify PostConfirmation for Google
-  users; account linking (same email, password + Google) via PreSignUp later
-- 4.3: Tiers: `tier` on USER#<sub>/PROFILE (set by PostConfirmation), GET /v1/users/me, Java tier checks → 403
-  (DynamoDB, not Cognito groups: a payment webhook can change it instantly)
-- 4.4: Tier-gated pages (locked sidebar items, upgrade prompt), optional usage quotas (conditional UpdateItem)
+  `https://*.amazoncognito.com` → c5 Amplify oauth config + signInWithRedirect → c6 account linking: deferred to
+  the backlog (PostConfirmation for Google users verified in c4)
+- 4.3: Tiers FREE < PRO for now (BUSINESS later = one enum line; enum order = rank; stored uppercase;
+  missing/unknown → FREE = fail closed): `tier` on USER#<sub>/PROFILE (set by PostConfirmation), GET /v1/users/me,
+  Java tier checks → 403 (DynamoDB, not Cognito groups: a payment webhook can change it instantly). Users can't
+  change their tier. a) model b) /me + TierCheck + demo GET /v1/demo/pro c) CDK routes + deploy.
+  d) Tutorial progress: `tutorialVersion` number on PROFILE (missing = 0), returned by /me, raised by the user via
+  PUT /v1/users/me/tutorial `{"version": n}` (conditional: only upwards). Frontend shows the tutorial when
+  stored < CURRENT_TUTORIAL_VERSION → a new tutorial version shows once to everyone, no migration
+- 4.4: Tier-gated pages (locked sidebar items, upgrade prompt), tutorial overlay + "Replay tutorial", optional usage
+  quotas per tier with rolling windows (used/limit/resetAt; conditional UpdateItem)
+- Later (Stripe): billing state separate from tier (subscriptionStatus, stripeCustomerId, currentPeriodEnd,
+  cancelAtPeriodEnd); tier changes only via webhook
 - Later: custom domain, Stripe. Optional/paid: Apple sign-in (needs the $99/year Apple Developer Program; skipped
   for budget. Name only sent on first sign-in; pool requires given/family name)
 
 ## Current step
-4.2c5 deploy (branch `feature/4.2c-google`): commit c5 + docs, fast-forward `main`, push. On beta (hosted): Google
-button end to end (this is where the CSP `*.amazoncognito.com` entry matters: the token fetch), sign out, password
-sign-in; approve prod. Then c6: account linking (same email as password user + Google → two users today).
+4.3c on branch `feature/4.3-tiers`: merge + deploy beta, then test: /me (FREE) → /demo/pro 403 → upgrade own
+user via `aws dynamodb update-item` (tier = PRO) → /demo/pro 200 without signing in again; approve prod.
+Next: 4.3d tutorialVersion (GET /me field + PUT /v1/users/me/tutorial, upward-only conditional update).
 Workflow: `feature/*` branches; merge to `main` = deploy; put doc updates on the branch (one pipeline run).
