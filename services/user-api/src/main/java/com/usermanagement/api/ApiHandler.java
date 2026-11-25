@@ -22,6 +22,7 @@ import org.crac.Resource;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Set;
+import com.usermanagement.api.users.UpdateTutorialProgress; 
 
 
 
@@ -50,7 +51,8 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
                 new GetUserProfile(users),
                 new UpdateUserProfile(users),
                 new GetMe(users),
-                new GetProDemo(users));
+                new GetProDemo(users),
+                new UpdateTutorialProgress(users));
         this.routes = endpoints.stream()
                 .collect(Collectors.toUnmodifiableMap(Endpoint::routeKey, endpoint -> endpoint));
         this.allowedOrigins = allowedOrigins;

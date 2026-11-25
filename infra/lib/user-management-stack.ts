@@ -309,6 +309,21 @@ export class UserManagementStack extends Stack {
         },
       },
     });
+    // 4.3d: UpdateTutorialProgress.Request
+    const updateTutorialModel = api.addModel('UpdateTutorialModel', {
+      modelName: 'UpdateTutorialRequest',
+      contentType: 'application/json',
+      schema: {
+        schema: apigw.JsonSchemaVersion.DRAFT4,
+        type: apigw.JsonSchemaType.OBJECT,
+        required: ['version'],
+        additionalProperties: false,
+        properties: {
+          version: { type: apigw.JsonSchemaType.INTEGER, minimum: 1 },
+        },
+      },
+    });
+
 
     // Return validation errors as Problem Details, like the Lambda does
     api.addGatewayResponse('BadRequestBody', {
@@ -376,10 +391,19 @@ export class UserManagementStack extends Stack {
       requestValidator: bodyValidator,
       requestModels: { 'application/json': updateUserProfileModel },
     });
-    // 4.3: who am I + tier (profile fields + tier; tutorialVersion later)
-    users.addResource('me').addMethod('GET', integration, {
+        // 4.3: who am I + tier + tutorialVersion
+    const me = users.addResource('me');
+    me.addMethod('GET', integration, {
       authorizer,
       authorizationType: apigw.AuthorizationType.COGNITO,
+    });
+
+    // 4.3d: tutorial progress (only upwards; conditional UpdateItem in Java)
+    me.addResource('tutorial').addMethod('PUT', integration, {
+      authorizer,
+      authorizationType: apigw.AuthorizationType.COGNITO,
+      requestValidator: bodyValidator,
+      requestModels: { 'application/json': updateTutorialModel },
     });
 
     // 4.3: demo of a tier-gated endpoint (Java returns 403 Tier.Required below PRO)
@@ -387,9 +411,6 @@ export class UserManagementStack extends Stack {
       authorizer,
       authorizationType: apigw.AuthorizationType.COGNITO,
     });
-
-
-
  
     // ---------- Upload the built React app ----------
     const webDist = path.join(__dirname, '../../apps/web/dist');

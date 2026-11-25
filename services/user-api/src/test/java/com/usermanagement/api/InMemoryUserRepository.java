@@ -29,7 +29,20 @@ class InMemoryUserRepository implements UserRepository {
         if (existing == null) {
             return false;
         }
-        usersById.put(id, new User(existing.id(), existing.email(), firstName, lastName, existing.tier()));
+        usersById.put(id, new User(existing.id(), existing.email(), firstName, lastName, existing.tier(), existing.tutorialVersion()));
         return true;
     }
+    @Override
+    public boolean raiseTutorialVersion(String id, int version) {
+        User existing = usersById.get(id);
+        if (existing == null) {
+            return false;
+        }
+        if (version > existing.tutorialVersion()) {
+            usersById.put(id, new User(existing.id(), existing.email(), existing.firstName(),
+                    existing.lastName(), existing.tier(), version));
+        }
+        return true;
+    }
+
 }

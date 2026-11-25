@@ -11,6 +11,8 @@ import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedExce
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
 import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
+import software.amazon.awssdk.services.dynamodb.model.ReturnValuesOnConditionCheckFailure;
+
 
 /** Evently: Infrastructure/Users/UserRepository.cs, but single-table DynamoDB instead of EF Core. */
 public final class DynamoDbUserRepository implements UserRepository {
@@ -108,13 +110,15 @@ public final class DynamoDbUserRepository implements UserRepository {
 
         Map<String, AttributeValue> item = response.item();
         AttributeValue tier = item.get("tier");                 // null for profiles created before 4.3
+        AttributeValue tutorial = item.get("tutorialVersion");  // null until the user finishes a tutorial
+
         return Optional.of(new User(
                 item.get("id").s(),
                 item.get("email").s(),
                 item.get("firstName").s(),
                 item.get("lastName").s(),
-                Tier.fromStored(tier == null ? null : tier.s())));
-
+                Tier.fromStored(tier == null ? null : tier.s()),
+                tutorial == null ? 0 : Integer.parseInt(tutorial.n())));
     }
 
     @Override
@@ -134,6 +138,27 @@ public final class DynamoDbUserRepository implements UserRepository {
             return false; // no such user
         }
     }
+    @Override
+    public boolean raiseTutorialVersion(String id, int version) {
+        try {
+            dynamo.updateItem(request -> request
+                    .tableName(tableName)
+                    .key(Map.of("pk", s(userPk(id)), "sk", s(PROFILE)))
+                    .updateExpression("SET tutorialVersion = :v, updatedAt = :updatedAt")
+                    .conditionExpression("attribute_exists(pk) AND "
+                            + "(attribute_not_exists(tutorialVersion) OR tutorialVersion < :v)")
+                    .expressionAttributeValues(Map.of(
+                            ":v", AttributeValue.fromN(Integer.toString(version)),
+                            ":updatedAt", s(Instant.now().toString())))
+                    .returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD));
+            return true;
+        } catch (ConditionalCheckFailedException e) {
+            // Condition failed for one of two reasons; the returned old item tells which:
+            // item present → stored version already >= requested (no-op); no item → user doesn't exist
+            return e.hasItem() && !e.item().isEmpty();
+        }
+    }
+
 
     static String userPk(String id) {
         return "USER#" + id;

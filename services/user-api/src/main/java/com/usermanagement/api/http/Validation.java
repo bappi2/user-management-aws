@@ -31,6 +31,13 @@ public final class Validation {
         }
         return this;
     }
+    public Validation atLeast(String field, Integer value, int min) {
+        if (value == null || value < min) {
+            errors.add(new ProblemDetails.FieldError(field, field + " must be a number of at least " + min));
+        }
+        return this;
+    }
+
 
     public void throwIfInvalid() {
         if (!errors.isEmpty()) {

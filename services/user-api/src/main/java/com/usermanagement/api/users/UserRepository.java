@@ -12,4 +12,8 @@ public interface UserRepository {
 
     /** @return false if no user with this id exists */
     boolean updateName(String id, String firstName, String lastName);
+
+    /** Raises tutorialVersion if {@code version} is higher; lower/equal is a no-op. @return false if no such user */
+    boolean raiseTutorialVersion(String id, int version);
+
 }

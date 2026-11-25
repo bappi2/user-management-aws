@@ -22,8 +22,8 @@ class ApiHandlerTest {
     @BeforeEach
     void setUp() {
         var users = new InMemoryUserRepository();
-        users.insert(new User(USER_ID, "jane@example.com", "Jane", "Doe", Tier.FREE));
-        users.insert(new User(PRO_USER_ID, "pat@example.com", "Pat", "Pro", Tier.PRO));
+        users.insert(new User(USER_ID, "jane@example.com", "Jane", "Doe", Tier.FREE, 0));
+        users.insert(new User(PRO_USER_ID, "pat@example.com", "Pat", "Pro", Tier.PRO, 0));
         handler = new ApiHandler(users);
     }
 
@@ -103,6 +103,26 @@ class ApiHandlerTest {
 
         assertEquals(200, response.getStatusCode());
     }
+    @Test
+    void tutorialVersionStartsAtZero() throws Exception {
+        assertEquals(0, body(call("GET", "/v1/users/me", null, USER_ID)).get("tutorialVersion").asInt());
+    }
+
+    @Test
+    void tutorialVersionOnlyGoesUp() throws Exception {
+        assertEquals(204, call("PUT", "/v1/users/me/tutorial", "{\"version\":2}", USER_ID).getStatusCode());
+        assertEquals(204, call("PUT", "/v1/users/me/tutorial", "{\"version\":1}", USER_ID).getStatusCode());
+
+        assertEquals(2, body(call("GET", "/v1/users/me", null, USER_ID)).get("tutorialVersion").asInt());
+    }
+
+    @Test
+    void tutorialVersionBelowOneIsRejected() throws Exception {
+        var response = call("PUT", "/v1/users/me/tutorial", "{\"version\":0}", USER_ID);
+
+        assertEquals(400, response.getStatusCode());
+        assertEquals("Validation.Failed", body(response).get("title").asText());
+    }
 
 
     // --- helpers -------------------------------------------------------------
@@ -127,7 +147,7 @@ class ApiHandlerTest {
         @Test
     void allowedOriginGetsCorsHeader() {
         var users = new InMemoryUserRepository();
-        users.insert(new User(USER_ID, "jane@example.com", "Jane", "Doe", Tier.FREE));
+        users.insert(new User(USER_ID, "jane@example.com", "Jane", "Doe", Tier.FREE, 0));
         var corsHandler = new ApiHandler(users, java.util.Set.of("http://localhost:5173"));
 
         var event = profileRequestWithOrigin("http://localhost:5173");

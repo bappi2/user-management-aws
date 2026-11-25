@@ -43,7 +43,8 @@ public class PostConfirmationHandler
                 attributes.get("email").toLowerCase(Locale.ROOT),
                 attributes.get("given_name"),
                 attributes.get("family_name"),
-                Tier.FREE);
+                Tier.FREE, 
+                0); // tutorialVersion: 0 until the user finishes a tutorial
 
         boolean created = users.insert(user);
         log(context, "PostConfirmation sub=" + user.id() + (created ? " profile created" : " profile already existed"));

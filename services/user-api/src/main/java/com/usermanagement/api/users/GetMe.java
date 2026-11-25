@@ -10,7 +10,8 @@ import com.usermanagement.api.http.RequestIdentity;
 /** Who am I and what may I do: profile + tier. The frontend calls it once after sign-in. */
 public final class GetMe implements Endpoint {
 
-    public record Response(String id, String email, String firstName, String lastName, Tier tier) {}
+    public record Response(String id, String email, String firstName, String lastName, Tier tier, int tutorialVersion) {}
+
 
     private final UserRepository users;
 
@@ -30,6 +31,7 @@ public final class GetMe implements Endpoint {
         User user = users.findById(userId).orElseThrow(() ->
                 ApiException.notFound("Users.NotFound", "The user with the identifier " + userId + " not found"));
 
-        return HttpResponses.ok(new Response(user.id(), user.email(), user.firstName(), user.lastName(), user.tier()));
+        return HttpResponses.ok(new Response(user.id(), user.email(), user.firstName(), user.lastName(),
+                user.tier(), user.tutorialVersion()));
     }
 }
