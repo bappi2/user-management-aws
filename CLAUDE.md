@@ -71,6 +71,11 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   PostConfirmation writes FREE. Read from DynamoDB on every gated call (not from the token: upgrades apply on the next
   request). `TierCheck.require(user, Tier.PRO)` → 403 Problem Details `Tier.Required`. API Gateway only checks
   identity; Java checks the tier. Users can't change their tier (no API); today: `aws dynamodb update-item` by hand
+- Tutorial (4.3d): `tutorialVersion` number on PROFILE (not written at insert: missing = 0; insert Map.of is at its
+  10-pair max). GET /me returns it; PUT /v1/users/me/tutorial `{"version": n}` (model: integer ≥ 1; Java `atLeast`)
+  → 204. One conditional UpdateItem `attribute_exists(pk) AND (attribute_not_exists(tutorialVersion) OR
+  tutorialVersion < :v)` (atomic, no read-compare-write race) + `ReturnValuesOnConditionCheckFailure.ALL_OLD`:
+  old item present → lower/equal = no-op 204; no item → 404
 - GOTCHA: removing a REST API route via CDK can leave it live in the stage (Deployment snapshot is taken before
   CFN cleanup deletes the old Method). After removing routes, verify the stage with
   `aws apigateway get-export --stage-name <stage> --export-type oas30` and `create-deployment` if needed
@@ -210,7 +215,11 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   Deployed beta (hosted Google sign-in incl. CSP token fetch) + prod
 - 4.2c6: account linking deferred (backlog, before real users)
 - 4.3a–c: Tier enum (FREE, PRO) + `tier` on PROFILE, GET /v1/users/me, TierCheck → 403 `Tier.Required`, demo
-  GET /v1/demo/pro, CDK routes (Cognito authorizer, no model); 19 JUnit tests; diff reviewed (additions only)
+  GET /v1/demo/pro, CDK routes (Cognito authorizer, no model); 19 JUnit tests; diff reviewed (additions only).
+  Deployed beta + prod. Beta test: old user /me → FREE (no tier attribute), /demo/pro 403 → update-item PRO →
+  same token 200 (bappi2+umtest2 stays PRO for 4.4)
+- 4.3d: tutorialVersion on User, GET /me field, PUT /v1/users/me/tutorial (upward-only conditional update, model);
+  22 JUnit tests; diff reviewed (additions only)
 
 ## Phase 4 plan (reusable starter for a future app)
 Public landing page, social login, user tiers, sidebar for signed-in pages.
@@ -236,7 +245,7 @@ Public landing page, social login, user tiers, sidebar for signed-in pages.
   for budget. Name only sent on first sign-in; pool requires given/family name)
 
 ## Current step
-4.3c on branch `feature/4.3-tiers`: merge + deploy beta, then test: /me (FREE) → /demo/pro 403 → upgrade own
-user via `aws dynamodb update-item` (tier = PRO) → /demo/pro 200 without signing in again; approve prod.
-Next: 4.3d tutorialVersion (GET /me field + PUT /v1/users/me/tutorial, upward-only conditional update).
+4.3d on branch `feature/4.3d-tutorial`: merge + deploy beta, test with curl (/me → 0, PUT 2 → 204, PUT 1 → 204,
+/me → 2, PUT 0 → 400 from the gateway model, PUT 2.5 → 400), approve prod. Then 4.4 (frontend: /me in context,
+tier-gated sidebar + upgrade prompt, 403 `Tier.Required` vs sign-in, tutorial overlay + "Replay tutorial").
 Workflow: `feature/*` branches; merge to `main` = deploy; put doc updates on the branch (one pipeline run).

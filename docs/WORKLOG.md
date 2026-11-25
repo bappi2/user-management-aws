@@ -518,6 +518,19 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
   no model (no body). Diff: 3 Resources, GET/OPTIONS Methods, 4 Lambda Permissions, new Deployment; both functions get
   the new JAR (PostConfirmation really changed: writes tier). Nothing stateful touched
 - `cdk diff` needs the construct path (`UserManagement-Pipeline/beta/UserManagement`), not the stack name; `cdk ls` shows both
+- Deployed beta + prod (routes answer 401 without a token = route exists + authorizer guards it). Beta test with a CLI
+  token (`read -s` for the password): pre-4.3 user /me → FREE, /demo/pro 403 `Tier.Required`, `update-item` tier=PRO
+  (`attribute_exists(pk)` guards typos), same token → 200. Tier in DynamoDB = instant upgrade/downgrade
+- **Mistakes:** ran the git commands from `infra/` (pathspec errors, chain still switched to main; nothing lost, nothing
+  pushed); replaced the whole `read -s "PW?Password: "` string with a prompt → zsh "not an identifier"
+
+### 4.3d: tutorialVersion
+- `int tutorialVersion` on User (missing → 0, not written at insert); GET /me returns it; PUT /v1/users/me/tutorial
+  → `UpdateTutorialProgress`, Validation `atLeast` (Integer, so a missing field is an error, not 0)
+- Repository `raiseTutorialVersion`: one conditional UpdateItem (compare inside DynamoDB = no race between tabs);
+  `ReturnValuesOnConditionCheckFailure.ALL_OLD` tells "user missing" (404) from "already higher" (no-op 204)
+- CDK: `me` kept in a variable (same ID → no change), `tutorial` PUT with validator + `UpdateTutorialRequest` model
+  (integer, minimum 1). Diff: additions only. 22 tests
 
 ---
 
@@ -565,6 +578,9 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
 39. Test reports in `target/surefire-reports` survive a failed build: read counts only after BUILD SUCCESS (`mvn package && grep …`)
 40. A 403 now has two meanings: authorizer (bad token → sign in again) vs Java `Tier.Required` (upgrade prompt); check the title
 41. `cdk diff <path>`: stage stacks are addressed by construct path, not CloudFormation stack name (`npx cdk ls`)
+42. zsh `read -s "VAR?Prompt: "`: the part before `?` is the variable name; never type the secret into the command
+43. To add a child under an existing CDK resource, keep it in a variable; calling `addResource('me')` twice = duplicate ID
+44. A failed DynamoDB condition can return the current item (`ReturnValuesOnConditionCheckFailure.ALL_OLD`) to explain why
 
 ---
 
@@ -622,5 +638,4 @@ aws apigateway create-deployment --rest-api-id <id> --stage-name beta
 
 ## Next
 
-Deploy 4.3a–c, test tiers on beta (upgrade via `update-item`), approve prod. Then 4.3d tutorialVersion. See CLAUDE.md
-"Current step".
+Deploy 4.3d, test the tutorial endpoint on beta, approve prod. Then 4.4 frontend. See CLAUDE.md "Current step".
