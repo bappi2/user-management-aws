@@ -531,6 +531,30 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
   `ReturnValuesOnConditionCheckFailure.ALL_OLD` tells "user missing" (404) from "already higher" (no-op 204)
 - CDK: `me` kept in a variable (same ID → no change), `tutorial` PUT with validator + `UpdateTutorialRequest` model
   (integer, minimum 1). Diff: additions only. 22 tests
+- Deployed beta + prod. Curl test on beta: /me → 0, PUT 2 → 204, PUT 1 → 204 (no-op), /me → 2; PUT 0, 2.5 and `{}`
+  → 400 `Request.ValidationFailed` from the gateway (detail only "Invalid request body": the edge is cheap but vague,
+  Java gives field errors)
+
+### 4.4a: /me in the frontend
+- `Me` type + `getMe` in api.ts; `isTierError` + `isAuthError` excludes it (the review's 403 bug, fixed before any
+  gated page existed). MeProvider as a layout route inside RequireAuth (unmounts on sign-out → no stale tier);
+  `useMe()`; tier badge in the sidebar. Tested: umtest2 PRO, Google user FREE, no PRO flash when switching users
+- ESLint `react-hooks/set-state-in-effect`: `useEffect(() => void reload())` flagged → first load via promise
+  callbacks + `active` guard; `reload` stays for event handlers (pipeline runs build, not lint: run `npx eslint src`)
+
+### 4.4b: Locked PRO page
+- `hasTier` (mirrors Java `includes`, unknown → no access), UpgradePrompt component, ProPage (/app/pro) calls
+  `GET /v1/demo/pro` only when allowed; three error branches: tier → prompt + reload, auth → sign out, else message
+- Test 3: downgraded umtest2 with `update-item` while signed in, clicked the page → 403 → prompt, badge FREE, still
+  signed in. **Mistake:** skipped Step 2 (`hasTier` in meContext) → TS2305 "has no exported member"
+
+### 4.4c: Tutorial
+- src/tutorial/steps.ts (content + CURRENT_TUTORIAL_VERSION = 1), `<Tutorial>` overlay (role=dialog), Done and Skip
+  save via PUT → reload, Replay doesn't save. umtest2 never sees it (stored 2 ≥ 1: upward-only by design)
+
+### Review: best practices (Nov 24)
+- External review of main: error consistency, validation limits, template naming, observability, infra tests,
+  DynamoDB access patterns. Turned into the Phase 5 plan in CLAUDE.md
 
 ---
 
@@ -581,6 +605,9 @@ Goal: a foundation for a future app (product idea not decided yet). Work happens
 42. zsh `read -s "VAR?Prompt: "`: the part before `?` is the variable name; never type the secret into the command
 43. To add a child under an existing CDK resource, keep it in a variable; calling `addResource('me')` twice = duplicate ID
 44. A failed DynamoDB condition can return the current item (`ReturnValuesOnConditionCheckFailure.ALL_OLD`) to explain why
+45. Frontend tier checks are UX only (DevTools can change them); the server check is the lock
+46. User-specific context belongs below the auth guard (unmounts on sign-out), not in a global provider
+47. The pipeline doesn't lint: `npx tsc -b && npx eslint src` before pushing frontend changes
 
 ---
 
@@ -638,4 +665,5 @@ aws apigateway create-deployment --rest-api-id <id> --stage-name beta
 
 ## Next
 
-Deploy 4.3d, test the tutorial endpoint on beta, approve prod. Then 4.4 frontend. See CLAUDE.md "Current step".
+Push 4.4a–c, test on hosted beta, approve prod (Phase 4 done). Then Phase 5, starting with 5.1 Cleanup. See
+CLAUDE.md "Current step" and "Phase 5 plan".

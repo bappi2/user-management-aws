@@ -136,7 +136,18 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   - Convention: `components/` = reusable forms reporting events via callback props (SignInForm, ProfileForm…);
     `pages/` = one file per URL wiring them to router/context. App name in `src/brand.ts` (APP_NAME) + index.html title
   - api.ts = single API client: ID token in `Authorization`, ApiError(status, problem), 401/403 → ProfilePage calls
-    `signOut('Your session expired…')`
+    `signOut('Your session expired…')`. `isTierError` = 403 + title `Tier.Required` (upgrade prompt);
+    `isAuthError` = 401/403 EXCEPT tier errors (otherwise a FREE user on a PRO page gets signed out)
+  - /me (4.4a): MeProvider (src/me) = layout route between RequireAuth and AppLayout; loads GET /me once per visit
+    (setState only in promise callbacks + `active` guard: lint rule set-state-in-effect), exposes `{ me, error, reload }`
+    via `useMe()`. Unmounts on sign-out → no stale tier from the previous user. `hasTier(me, tier)` mirrors Java
+    `Tier.includes` (unknown tier → no access); UI hint only, the API enforces. Sidebar shows a tier badge
+  - Gated pages (4.4b): route NOT tier-guarded (a locked page that explains itself sells the upgrade); page checks
+    `hasTier` → `<UpgradePrompt required="PRO" />` without calling the API; server 403 `Tier.Required` (downgraded
+    since /me loaded) → prompt + `reload()`. Sidebar item gets 🔒 + `.locked`. Template: ProPage (/app/pro)
+  - Tutorial (4.4c): content + `CURRENT_TUTORIAL_VERSION` in src/tutorial/steps.ts (bump = everyone sees it once);
+    `<Tutorial>` in AppLayout opens when `me.tutorialVersion < CURRENT` or on "Replay tutorial". Done/Skip both save
+    (PUT version → reload); closes immediately, a failed save just shows it again next visit. Replay never saves
   - GOTCHA: `npm run dev` does NOT type-check: a missing import is a blank page (ReferenceError in the Console).
     Run `npx tsc -b` when the page is blank. Router hooks throw outside `<BrowserRouter>`
   - Config: `config.ts` loadConfig() → dev uses .env.local (scripts/env-from-stack.sh, VITE_* vars incl.
@@ -219,7 +230,11 @@ Pipeline in the console (reference, Nov 2026): Source → Build (Synth) → Upda
   Deployed beta + prod. Beta test: old user /me → FREE (no tier attribute), /demo/pro 403 → update-item PRO →
   same token 200 (bappi2+umtest2 stays PRO for 4.4)
 - 4.3d: tutorialVersion on User, GET /me field, PUT /v1/users/me/tutorial (upward-only conditional update, model);
-  22 JUnit tests; diff reviewed (additions only)
+  22 JUnit tests; diff reviewed (additions only). Deployed beta + prod; curl test on beta (0 → PUT 2 → PUT 1 no-op
+  → 2; 0 / 2.5 / {} rejected by the gateway model)
+- 4.4a–c (local, `feature/4.4-frontend-tiers`): MeProvider + tier badge; ProPage + UpgradePrompt + locked sidebar
+  item (downgrade while signed in → prompt, stays signed in); tutorial overlay + Replay. Quotas skipped (no real
+  feature to meter yet)
 
 ## Phase 4 plan (reusable starter for a future app)
 Public landing page, social login, user tiers, sidebar for signed-in pages.
@@ -244,8 +259,26 @@ Public landing page, social login, user tiers, sidebar for signed-in pages.
 - Later: custom domain, Stripe. Optional/paid: Apple sign-in (needs the $99/year Apple Developer Program; skipped
   for budget. Name only sent on first sign-in; pool requires given/family name)
 
+## Phase 5 plan (hardening + template readiness; from the Nov 24 best-practices review)
+One `feature/*` branch each, in this order. Item numbers refer to the review.
+- 5.1 Cleanup (17–19): dead/commented code, unused imports/emailPk, outdated javadocs; `requireUser` helper for
+  find-or-404 (GetUserProfile, GetMe, GetProDemo); PostConfirmation null checks with a readable log line
+- 5.2 Errors (1–5): docs/errors.md code list; Problem Details with readable `title` + `code` + `requestId`
+  (API Gateway `getRequestContext().getRequestId()` = `$context.requestId`); FieldError(field, code, message) with
+  JSON names; problem+json templates on DEFAULT_4XX/5XX (429/504/413). Java + gateway + api.ts in ONE branch
+  (frontend switches from `title` to `code`, e.g. isTierError). Optional 405 (6)
+- 5.3 Validation (7–11): maxLength 100 on names (model + Java), 415 for non-JSON bodies, pattern `\S`, control chars
+  in Java (`\p{Cc}` in a gateway model: test on beta first), optional unknown-property field error
+- 5.4 docs/dynamodb.md: access-pattern tables + the 10 rules, linked from CLAUDE.md (P1 tutorial already built)
+- 5.5 Observability (13–14): API access logs (JSON), X-Ray, alarms → SNS; `Cache-Control: no-store` on API responses
+- 5.6 Infra tests (15): Template.fromStack assertions (retention, IAM actions, authorizer on every method, CORS)
+- 5.7 Template (12, 16): `appName` in config for every name, OpenAPI export, "New project" checklist in README
+- 5.8 Before real users: account linking, root user → Identity Center, USER_PASSWORD_AUTH only on beta (20),
+  retainData/PITR/deletionProtection on prod (21), reproducible JAR (22)
+Already done from the review: frontend 403 Tier.Required fix (4.4a), tutorialVersion P1 (4.3d)
+
 ## Current step
-4.3d on branch `feature/4.3d-tutorial`: merge + deploy beta, test with curl (/me → 0, PUT 2 → 204, PUT 1 → 204,
-/me → 2, PUT 0 → 400 from the gateway model, PUT 2.5 → 400), approve prod. Then 4.4 (frontend: /me in context,
-tier-gated sidebar + upgrade prompt, 403 `Tier.Required` vs sign-in, tutorial overlay + "Replay tutorial").
+4.4a–c on branch `feature/4.4-frontend-tiers` (tested locally): fix ESLint set-state-in-effect in MeProvider,
+commit + push, test on hosted beta (PRO/FREE badge, ProPage, tutorial for a fresh user, CSP), approve prod.
+Then Phase 5 (5.1 Cleanup first).
 Workflow: `feature/*` branches; merge to `main` = deploy; put doc updates on the branch (one pipeline run).
