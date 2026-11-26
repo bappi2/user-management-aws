@@ -391,3 +391,76 @@ a.brand {
   opacity: 0.6;
   cursor: progress;
 }
+/* Tier badge */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: #e5e7eb;
+  color: #374151;
+}
+.badge.tier-pro {
+  background: #fef3c7;
+  color: #92400e;
+}
+/* Locked (tier-gated) sidebar item + upgrade prompt */
+.sidenav a.locked {
+  opacity: 0.6;
+}
+.upgrade {
+  max-width: 28rem;
+  padding: 1.5rem;
+  border: 1px dashed #d1d5db;
+  border-radius: 12px;
+}
+.upgrade h3 {
+  margin-top: 0;
+}
+/* Tutorial overlay */
+.tutorial-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(17, 24, 39, 0.5);
+  z-index: 100;
+}
+.tutorial {
+  width: min(100%, 26rem);
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+.tutorial h3 {
+  margin: 0.25rem 0 0.5rem;
+}
+.tutorial-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+.tutorial-skip {
+  margin-right: auto;            /* pushes Skip to the left, Back/Next to the right */
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+}
+.tutorial-next {
+  font-weight: 600;
+}
+button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

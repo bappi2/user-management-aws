@@ -16,6 +16,9 @@ import { SignUpPage } from './pages/SignUpPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
+import { MeProvider } from './me/MeProvider';
+import { ProPage } from './pages/app/ProPage';
+
 
 
 
@@ -42,14 +45,19 @@ function App() {
         </Route>
       </Route>
 
-      {/* Signed-in area: guard → sidebar layout → page */}
+      {/* Signed-in area: guard → load /me → sidebar layout → page */}
       <Route path="app" element={<RequireAuth />}>
-        <Route element={<AppLayout />}>
-          <Route index element={<HomePage />} />
-          <Route path="profile" element={<ProfilePage />} />
+        <Route element={<MeProvider />}>
+          <Route element={<AppLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="pro" element={<ProPage />} />
+
+          </Route>
         </Route>
       </Route>
     </Routes>
+
   );
 }
 
